@@ -90,11 +90,29 @@ class FileService {
     c.complete();
   }
 
-  static String get privateRoot {
-    final r = _privateRoot;
-    if (r == null) throw StateError('FileService.ensureLayout() not called');
-    return r;
+  /// Returns true on devices that don't need the permission (pre-Android 11)
+  /// or after the user grants `MANAGE_EXTERNAL_STORAGE`. When false, the
+  /// shared root falls back to the app-private external dir.
+  static Future<bool> hasAllFilesAccess() async {
+    try {
+      return (await _channel.invokeMethod<bool>('hasAllFilesAccess')) ?? false;
+    } catch (_) {
+      return false;
+    }
   }
+
+  /// Opens the Android system page where the user can grant All Files Access.
+  /// No-op on platforms / devices that don't support it.
+  static Future<void> requestAllFilesAccess() async {
+    try {
+      await _channel.invokeMethod('requestAllFilesAccess');
+    } catch (_) {}
+  }
+
+  /// True when the resolved [sharedRoot] is the public Shared/CodeMobile path
+  /// (visible in the user's file manager) vs the app-external fallback.
+  static bool get sharedIsPublic =>
+      (_sharedRoot ?? '').contains('/storage/emulated/0/Shared/CodeMobile');
 
   static String get sharedRoot {
     final r = _sharedRoot;

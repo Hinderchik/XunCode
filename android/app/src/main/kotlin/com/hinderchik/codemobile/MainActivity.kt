@@ -125,6 +125,26 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "appDataDir" -> result.success(terminalService.appDataDir().absolutePath)
                 "sharedDir" -> result.success(terminalService.sharedDir().absolutePath)
+                "hasAllFilesAccess" -> {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        result.success(android.os.Environment.isExternalStorageManager())
+                    } else {
+                        result.success(true) // pre-R doesn't need it
+                    }
+                }
+                "requestAllFilesAccess" -> {
+                    runCatching {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                android.net.Uri.parse("package:" + packageName),
+                            )
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                        }
+                    }
+                    result.success(true)
+                }
                 "ensureLayout" -> {
                     runCatching {
                         val app = terminalService.appDataDir()
