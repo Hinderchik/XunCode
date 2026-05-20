@@ -54,6 +54,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         content: Text('${plugin.name} installed'),
         backgroundColor: VscodeTheme.accent,
       ));
+      // Refresh so the download counter updates in the card.
+      _load();
     } catch (e) {
       if (!mounted) return;
       setState(() => _installedIds = _installedIds.where((id) => id != plugin.id).toSet());

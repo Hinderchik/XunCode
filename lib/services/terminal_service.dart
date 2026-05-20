@@ -125,7 +125,7 @@ class TerminalBridge {
     await markAlpineInstalled();
   }
 
-  static Future<void> _silent(Future<void> Function() block) async {
+  static Future<void> _silent(Future<Object?> Function() block) async {
     try { await block(); } catch (_) {}
   }
 
