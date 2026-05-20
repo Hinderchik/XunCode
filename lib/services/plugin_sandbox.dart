@@ -13,12 +13,16 @@ import 'plugin_service.dart';
 
 typedef UiCallback = void Function(String message, {bool isError});
 typedef OpenFileCallback = Future<void> Function(String path);
+typedef InputBoxCallback = Future<String?> Function(String? title, String? placeholder, String? value);
+typedef QuickPickCallback = Future<String?> Function(List<String> items, String? title);
 
 class PluginSandbox {
   final InstalledPlugin plugin;
   final EditorBridge editor;
   final UiCallback onUiMessage;
   final OpenFileCallback? onOpenFile;
+  final InputBoxCallback? onShowInputBox;
+  final QuickPickCallback? onShowQuickPick;
 
   HeadlessInAppWebView? _headless;
   InAppWebViewController? _ctrl;
@@ -30,6 +34,8 @@ class PluginSandbox {
     required this.editor,
     required this.onUiMessage,
     this.onOpenFile,
+    this.onShowInputBox,
+    this.onShowQuickPick,
   });
 
   Future<void> load() async {
@@ -166,6 +172,17 @@ class PluginSandbox {
       case 'ui.showError':
         onUiMessage(p['text']?.toString() ?? '', isError: true);
         return null;
+      case 'ui.showInputBox':
+        return onShowInputBox?.call(
+          p['title']?.toString(),
+          p['placeholder']?.toString(),
+          p['value']?.toString(),
+        );
+      case 'ui.showQuickPick':
+        final items = (p['items'] is List)
+            ? (p['items'] as List).map((e) => e.toString()).toList()
+            : <String>[];
+        return onShowQuickPick?.call(items, p['title']?.toString());
 
       // storage
       case 'storage.get':
@@ -401,8 +418,15 @@ class PluginSandbox {
         const ui = {
           showMessage: (text) => invoke('ui.showMessage', { text: String(text) }),
           showError: (text) => invoke('ui.showError', { text: String(text) }),
-          showInputBox: (opts) => Promise.resolve(null),
-          showQuickPick: (items) => Promise.resolve(null),
+          showInputBox: (opts) => invoke('ui.showInputBox', {
+            title: opts && opts.title ? String(opts.title) : null,
+            placeholder: opts && opts.placeholder ? String(opts.placeholder) : null,
+            value: opts && opts.value ? String(opts.value) : null,
+          }),
+          showQuickPick: (items, opts) => invoke('ui.showQuickPick', {
+            items: Array.isArray(items) ? items.map(String) : [],
+            title: opts && opts.title ? String(opts.title) : null,
+          }),
           showProgress: (title) => Promise.resolve(),
           createStatusBarItem: () => ({ setText: () => {}, dispose: () => {} }),
           createWebViewPanel: () => ({ dispose: () => {} }),

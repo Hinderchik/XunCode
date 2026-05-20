@@ -13,6 +13,8 @@ class PluginRuntime {
   EditorBridge? _editor;
   void Function(String message, {bool isError})? _uiNotifier;
   Future<void> Function(String path)? _openFile;
+  Future<String?> Function(String? title, String? placeholder, String? value)? _showInputBox;
+  Future<String?> Function(List<String> items, String? title)? _showQuickPick;
 
   void attachEditor(EditorBridge bridge) {
     _editor = bridge;
@@ -25,6 +27,17 @@ class PluginRuntime {
   void attachOpenFile(Future<void> Function(String path) openFile) {
     _openFile = openFile;
   }
+
+  void attachInputBox(Future<String?> Function(String? title, String? placeholder, String? value) fn) {
+    _showInputBox = fn;
+  }
+
+  void attachQuickPick(Future<String?> Function(List<String> items, String? title) fn) {
+    _showQuickPick = fn;
+  }
+
+  Future<String?> Function(String? title, String? placeholder, String? value)? get inputBox => _showInputBox;
+  Future<String?> Function(List<String> items, String? title)? get quickPick => _showQuickPick;
 
   Future<void> activateInstalled() async {
     final list = await PluginService.listInstalled();
@@ -43,6 +56,8 @@ class PluginRuntime {
         _uiNotifier?.call(msg, isError: isError);
       },
       onOpenFile: _openFile,
+      onShowInputBox: _showInputBox,
+      onShowQuickPick: _showQuickPick,
     );
     try {
       await sandbox.load();

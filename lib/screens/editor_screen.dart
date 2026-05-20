@@ -361,6 +361,14 @@ class _EditorScreenState extends State<EditorScreen> {
               _openFile(r['path']!, r['name']!, r['content']!);
             }
           });
+          PluginRuntime.instance.attachInputBox((title, placeholder, value) async {
+            if (!mounted) return null;
+            return _showPluginInputBox(title, placeholder, value);
+          });
+          PluginRuntime.instance.attachQuickPick((items, title) async {
+            if (!mounted) return null;
+            return _showPluginQuickPick(items, title);
+          });
           unawaited(PluginRuntime.instance.activateInstalled());
         }
       },
@@ -420,6 +428,70 @@ class _EditorScreenState extends State<EditorScreen> {
       'wordWrap': s.wordWrap ? 'on' : 'off',
     });
     await _webCtrl?.evaluateJavascript(source: 'window.applySettings && window.applySettings($payload);');
+  }
+
+  Future<String?> _showPluginInputBox(String? title, String? placeholder, String? value) {
+    final ctrl = TextEditingController(text: value ?? '');
+    return showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: VscodeTheme.bgSidebar,
+        title: Text(title ?? 'Input',
+          style: const TextStyle(color: VscodeTheme.fg, fontSize: 14)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(color: VscodeTheme.fg, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: placeholder ?? '',
+            hintStyle: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 12),
+          ),
+          onSubmitted: (v) => Navigator.pop(context, v),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ctrl.text),
+            child: const Text('OK', style: TextStyle(color: VscodeTheme.accent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _showPluginQuickPick(List<String> items, String? title) {
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: VscodeTheme.bgSidebar,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (title != null && title.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(title.toUpperCase(),
+                    style: const TextStyle(color: VscodeTheme.fgLabel,
+                      fontSize: 11, letterSpacing: 1, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ...items.map((it) => ListTile(
+                  dense: true,
+                  title: Text(it, style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+                  onTap: () => Navigator.pop(context, it),
+                )),
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.close, size: 16, color: VscodeTheme.fgMuted),
+              title: const Text('Cancel', style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 12)),
+              onTap: () => Navigator.pop(context, null),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _detectLang(String name) {
