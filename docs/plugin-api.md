@@ -529,6 +529,14 @@ Plugins run inside the Monaco WebView sandbox. The following are **not available
 
 ---
 
+## Support & Community
+
+- GitHub: [@Hinderchik](https://github.com/Hinderchik) — open issues and PRs here
+- Dev channel: [t.me/XunKal1Dev](https://t.me/XunKal1Dev) — direct line to the maintainer
+- Community channel: [t.me/GodPassTGK](https://t.me/GodPassTGK) — announcements and discussion
+
+---
+
 ## Changelog
 
 ### v1.0.0

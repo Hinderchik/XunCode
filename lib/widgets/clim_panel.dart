@@ -16,6 +16,7 @@ class ClimPanel extends StatefulWidget {
   final String language;
   final VoidCallback onClose;
   final Function(String code)? onInsertCode;
+  final bool fillWidth;
 
   const ClimPanel({
     super.key,
@@ -23,6 +24,7 @@ class ClimPanel extends StatefulWidget {
     required this.language,
     required this.onClose,
     this.onInsertCode,
+    this.fillWidth = false,
   });
 
   @override
@@ -161,7 +163,7 @@ class _ClimPanelState extends State<ClimPanel> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 320,
+      width: widget.fillWidth ? double.infinity : 320,
       decoration: const BoxDecoration(
         color: VscodeTheme.bgSidebar,
         border: Border(left: BorderSide(color: VscodeTheme.border)),

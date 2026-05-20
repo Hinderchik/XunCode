@@ -19,6 +19,8 @@ dependencies:
   flutter_svg: ^2.0.10+1
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
+  flutter_secure_storage: ^9.2.2
+  archive: ^3.6.1
 
 dev_dependencies:
   flutter_test:
@@ -30,8 +32,8 @@ flutter:
   assets:
     - assets/editor.html
     - assets/plugin-docs.html
-    - assets/monaco/vs/loader.js
-    - assets/monaco/vs/editor/editor.main.js
-    - assets/monaco/vs/editor/editor.main.css
-    - assets/monaco/vs/editor/editor.main.nls.js
-    - assets/monaco/vs/base/worker/workerMain.js
+    - assets/monaco/vs/
+    - assets/monaco/vs/base/worker/
+    - assets/monaco/vs/basic-languages/
+    - assets/monaco/vs/editor/
+    - assets/monaco/vs/language/

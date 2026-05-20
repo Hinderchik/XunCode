@@ -1,0 +1,491 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../app/theme.dart';
+import '../services/terminal_service.dart';
+
+/// Embedded terminal panel — multi-tab proot+Alpine shells. Designed to be
+/// dropped under the editor on tablets, or pulled up as a draggable sheet on
+/// phones (see editor_screen.dart §3 / §4).
+class TerminalPanel extends StatefulWidget {
+  final VoidCallback? onClose;
+  final double? minHeight;
+  const TerminalPanel({super.key, this.onClose, this.minHeight});
+
+  @override
+  State<TerminalPanel> createState() => _TerminalPanelState();
+}
+
+class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateMixin {
+  final List<_Tab> _tabs = [];
+  late TabController _ctrl;
+  bool _installing = false;
+  String _installStage = '';
+  double _installProgress = 0;
+  String? _installError;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TabController(length: 0, vsync: this);
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    final hasProot = await TerminalBridge.prootExists();
+    if (!hasProot) {
+      setState(() => _installError =
+          'proot binary missing. Run scripts/fetch-proot.sh and rebuild.');
+      return;
+    }
+    final installed = await TerminalBridge.isAlpineInstalled();
+    if (!installed) {
+      await _installAlpine();
+      if (_installError != null) return;
+    }
+    await _newTab();
+  }
+
+  Future<void> _installAlpine() async {
+    setState(() {
+      _installing = true;
+      _installStage = 'Preparing';
+      _installProgress = 0;
+      _installError = null;
+    });
+    try {
+      await TerminalBridge.installAlpine(onProgress: (p, stage) {
+        if (!mounted) return;
+        setState(() {
+          _installProgress = p;
+          _installStage = stage;
+        });
+      });
+    } catch (e) {
+      if (mounted) setState(() => _installError = 'Install failed: $e');
+    } finally {
+      if (mounted) setState(() => _installing = false);
+    }
+  }
+
+  Future<void> _newTab() async {
+    final id = 'term-${DateTime.now().microsecondsSinceEpoch}';
+    final session = await TerminalBridge.create(id: id);
+    final tab = _Tab(session: session);
+    setState(() {
+      _tabs.add(tab);
+      _ctrl.dispose();
+      _ctrl = TabController(length: _tabs.length, vsync: this, initialIndex: _tabs.length - 1);
+    });
+  }
+
+  Future<void> _closeTab(int index) async {
+    if (index < 0 || index >= _tabs.length) return;
+    final removed = _tabs.removeAt(index);
+    await removed.session.kill();
+    removed.dispose();
+    final newLen = _tabs.length;
+    final newIdx = newLen == 0 ? 0 : (index >= newLen ? newLen - 1 : index);
+    setState(() {
+      _ctrl.dispose();
+      _ctrl = TabController(length: newLen, vsync: this, initialIndex: newIdx);
+    });
+    if (newLen == 0 && widget.onClose != null) widget.onClose!();
+  }
+
+  @override
+  void dispose() {
+    for (final t in _tabs) {
+      t.session.kill();
+      t.dispose();
+    }
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(minHeight: widget.minHeight ?? 200),
+      decoration: const BoxDecoration(
+        color: VscodeTheme.bgPanel,
+        border: Border(top: BorderSide(color: VscodeTheme.border)),
+      ),
+      child: Column(
+        children: [
+          _buildHeader(),
+          if (_installing) _buildInstaller(),
+          if (_installError != null) _buildError(),
+          if (!_installing && _installError == null) Expanded(child: _buildTabs()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: const BoxDecoration(
+        color: VscodeTheme.bgTab,
+        border: Border(bottom: BorderSide(color: VscodeTheme.border)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.terminal, size: 14, color: VscodeTheme.fgMuted),
+          const SizedBox(width: 6),
+          const Text('TERMINAL',
+            style: TextStyle(fontSize: 11, color: VscodeTheme.fgLabel,
+              letterSpacing: 1, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 12),
+          if (_tabs.isNotEmpty)
+            Expanded(
+              child: TabBar(
+                controller: _ctrl,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                indicatorColor: VscodeTheme.accent,
+                indicatorWeight: 1,
+                labelColor: VscodeTheme.fg,
+                unselectedLabelColor: VscodeTheme.fgMuted,
+                labelStyle: const TextStyle(fontSize: 11),
+                tabs: List.generate(_tabs.length, (i) {
+                  return Tab(
+                    height: 28,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('sh ${i + 1}'),
+                        const SizedBox(width: 6),
+                        InkWell(
+                          onTap: () => _closeTab(i),
+                          child: const Icon(Icons.close, size: 12, color: VscodeTheme.fgMuted),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            )
+          else
+            const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.add, size: 16),
+            color: VscodeTheme.fgMuted,
+            tooltip: 'New shell',
+            onPressed: _installing ? null : _newTab,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+          if (widget.onClose != null)
+            IconButton(
+              icon: const Icon(Icons.keyboard_arrow_down, size: 18),
+              color: VscodeTheme.fgMuted,
+              tooltip: 'Hide terminal',
+              onPressed: widget.onClose,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstaller() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          const Icon(Icons.cloud_download_outlined, size: 36, color: VscodeTheme.accent),
+          const SizedBox(height: 12),
+          Text(_installStage,
+            style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: _installProgress > 0 ? _installProgress : null,
+            color: VscodeTheme.accent,
+            backgroundColor: VscodeTheme.bgInput,
+            minHeight: 3,
+          ),
+          const SizedBox(height: 6),
+          Text('Alpine Linux minirootfs (~3 MB)',
+            style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          const Icon(Icons.error_outline, size: 32, color: VscodeTheme.red),
+          const SizedBox(height: 10),
+          Text(_installError ?? '',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: VscodeTheme.fg, fontSize: 12)),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.refresh, size: 14),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: VscodeTheme.accent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              setState(() => _installError = null);
+              _bootstrap();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabs() {
+    if (_tabs.isEmpty) {
+      return Center(
+        child: TextButton.icon(
+          icon: const Icon(Icons.add, size: 14),
+          label: const Text('New shell', style: TextStyle(fontSize: 12)),
+          onPressed: _newTab,
+        ),
+      );
+    }
+    return TabBarView(
+      controller: _ctrl,
+      physics: const NeverScrollableScrollPhysics(),
+      children: _tabs.map((t) => _TerminalView(tab: t)).toList(),
+    );
+  }
+}
+
+class _Tab {
+  final TerminalSession session;
+  final ScrollController scroll = ScrollController();
+  final TextEditingController input = TextEditingController();
+  final FocusNode focus = FocusNode();
+  final ValueNotifier<String> buffer = ValueNotifier('');
+  StreamSubscription? sub;
+
+  _Tab({required this.session}) {
+    sub = session.output.listen((chunk) {
+      buffer.value = buffer.value + _stripAnsi(chunk);
+    });
+  }
+
+  void dispose() {
+    sub?.cancel();
+    scroll.dispose();
+    input.dispose();
+    focus.dispose();
+    buffer.dispose();
+  }
+}
+
+class _TerminalView extends StatefulWidget {
+  final _Tab tab;
+  const _TerminalView({required this.tab});
+
+  @override
+  State<_TerminalView> createState() => _TerminalViewState();
+}
+
+class _TerminalViewState extends State<_TerminalView> {
+  bool _ctrlMod = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.tab.buffer.addListener(_scrollToBottom);
+  }
+
+  @override
+  void dispose() {
+    widget.tab.buffer.removeListener(_scrollToBottom);
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!widget.tab.scroll.hasClients) return;
+      widget.tab.scroll.jumpTo(widget.tab.scroll.position.maxScrollExtent);
+    });
+  }
+
+  Future<void> _send(String text) async {
+    await widget.tab.session.write(text);
+  }
+
+  Future<void> _submit() async {
+    final cmd = widget.tab.input.text;
+    widget.tab.input.clear();
+    await _send('$cmd\n');
+    widget.tab.focus.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: ValueListenableBuilder<String>(
+            valueListenable: widget.tab.buffer,
+            builder: (_, text, __) => SingleChildScrollView(
+              controller: widget.tab.scroll,
+              padding: const EdgeInsets.all(8),
+              child: SelectableText(
+                text.isEmpty ? '' : text,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: VscodeTheme.fg,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ),
+        ),
+        _buildKeyRow(),
+        _buildPrompt(),
+      ],
+    );
+  }
+
+  Widget _buildKeyRow() {
+    return Container(
+      height: 32,
+      decoration: const BoxDecoration(
+        color: VscodeTheme.bgTab,
+        border: Border(top: BorderSide(color: VscodeTheme.border)),
+      ),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        children: [
+          _modKey('Ctrl', _ctrlMod, () => setState(() => _ctrlMod = !_ctrlMod)),
+          _key('Esc', () => _send('')),
+          _key('Tab', () => _send('\t')),
+          _key('↑', () => _send('[A')),
+          _key('↓', () => _send('[B')),
+          _key('←', () => _send('[D')),
+          _key('→', () => _send('[C')),
+          _key('|', () => _send('|')),
+          _key('~', () => _send('~')),
+          _key('/', () => _send('/')),
+        ],
+      ),
+    );
+  }
+
+  Widget _modKey(String label, bool active, VoidCallback onTap) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(3),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: active ? VscodeTheme.accent : VscodeTheme.bgInput,
+          borderRadius: BorderRadius.circular(3),
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+          style: TextStyle(
+            color: active ? Colors.white : VscodeTheme.fg,
+            fontSize: 11,
+          )),
+      ),
+    ),
+  );
+
+  Widget _key(String label, VoidCallback onTap) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(3),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: VscodeTheme.bgInput,
+          borderRadius: BorderRadius.circular(3),
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+          style: const TextStyle(color: VscodeTheme.fg, fontSize: 11)),
+      ),
+    ),
+  );
+
+  Widget _buildPrompt() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: VscodeTheme.bgPanel,
+        border: Border(top: BorderSide(color: VscodeTheme.border)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Text('\$',
+            style: TextStyle(color: VscodeTheme.green, fontFamily: 'monospace', fontSize: 13)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: widget.tab.input,
+              focusNode: widget.tab.focus,
+              autofocus: false,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.visiblePassword,
+              style: const TextStyle(
+                color: VscodeTheme.fg, fontFamily: 'monospace', fontSize: 13),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                border: InputBorder.none,
+                hintText: 'Type a command…',
+                hintStyle: TextStyle(color: VscodeTheme.fgMuted, fontSize: 12),
+              ),
+              textInputAction: TextInputAction.go,
+              onSubmitted: (_) => _submit(),
+              onChanged: _ctrlMod ? _handleCtrl : null,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, size: 16, color: VscodeTheme.accent),
+            onPressed: _submit,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleCtrl(String value) async {
+    if (value.isEmpty) return;
+    final last = value.codeUnitAt(value.length - 1);
+    if (last >= 0x40 && last <= 0x7E) {
+      // Ctrl+letter — send the corresponding control byte (Ctrl+C => 0x03 etc.)
+      final code = last & 0x1F;
+      await _send(String.fromCharCode(code));
+      widget.tab.input.clear();
+      setState(() => _ctrlMod = false);
+    }
+  }
+}
+
+/// Strip basic ANSI escape sequences. We render plain text for now — a future
+/// pass can wire xterm.js in a WebView for full color support.
+String _stripAnsi(String s) {
+  return s
+      .replaceAll(RegExp(r'\x1B\[[0-9;?]*[ -/]*[@-~]'), '')
+      .replaceAll(RegExp(r'\x1B\][^\x07]*\x07'), '')
+      .replaceAll(RegExp(r'\x1B[()][AB012]'), '')
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n');
+}

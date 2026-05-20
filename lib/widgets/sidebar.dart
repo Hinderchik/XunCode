@@ -5,14 +5,6 @@ import '../models/open_file.dart';
 import '../services/file_service.dart';
 import 'file_tree.dart';
 
-class SearchHit {
-  final String path;
-  final String fileName;
-  final int line;
-  final String match;
-  SearchHit({required this.path, required this.fileName, required this.line, required this.match});
-}
-
 class Sidebar extends StatefulWidget {
   final String activePanel;
   final OpenFilesModel filesModel;
@@ -34,7 +26,7 @@ class _SidebarState extends State<Sidebar> {
   String _folderPath = '';
   String _folderName = '';
   final _searchCtrl = TextEditingController();
-  List<SearchHit> _searchResults = [];
+  List<SearchResult> _searchResults = [];
   bool _searching = false;
   String _status = '';
   bool _caseSensitive = false;
@@ -230,13 +222,13 @@ class _SidebarState extends State<Sidebar> {
     });
     final hits = await FileService.searchWorkspace(_folderPath, query, caseSensitive: _caseSensitive);
     setState(() {
-      _searchResults = hits.map((e) => SearchHit(path: e.path, fileName: e.fileName, line: e.line, match: e.match)).toList();
+      _searchResults = hits;
       _searching = false;
       _status = '${_searchResults.length} result(s)';
     });
   }
 
-  Future<void> _openSearchHit(SearchHit hit) async {
+  Future<void> _openSearchHit(SearchResult hit) async {
     final result = await FileService.readFile(hit.path);
     if (result != null) {
       widget.onFileOpen(result['path']!, result['name']!, result['content']!);

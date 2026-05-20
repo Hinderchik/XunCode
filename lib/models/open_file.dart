@@ -45,8 +45,9 @@ class OpenFilesModel extends ChangeNotifier {
   }
 
   void markDirty(String uri) {
-    final f = files.firstWhere((f) => f.uri == uri, orElse: () => files.first);
-    f.isDirty = true;
+    final idx = files.indexWhere((f) => f.uri == uri);
+    if (idx < 0) return;
+    files[idx].isDirty = true;
     notifyListeners();
   }
 

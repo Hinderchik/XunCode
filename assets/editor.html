@@ -248,26 +248,82 @@ require(['vs/editor/editor.main'], function() {
 
   function _buildCtx(pluginId) {
     const prefix = 'plugin:' + pluginId + ':';
+    const ed = window.editor;
+    const _saveHandlers = [];
+    const _openHandlers = [];
+    const _changeHandlers = [];
+    const _cursorHandlers = [];
+
+    ed.onDidChangeCursorPosition((e) => {
+      _cursorHandlers.forEach(fn => { try { fn({ line: e.position.lineNumber, column: e.position.column }); } catch(_) {} });
+    });
+
     return {
       editor: {
-        getValue: () => window.editor.getValue(),
-        setValue: (v) => window.editor.setValue(v),
-        getSelection: () => window.editor.getModel()?.getValueInRange(window.editor.getSelection()) ?? '',
-        replaceSelection: (text) => window.editor.executeEdits('plugin', [{
-          range: window.editor.getSelection(), text
+        // Canonical names
+        getValue: () => ed.getValue(),
+        setValue: (v) => ed.setValue(v ?? ''),
+        getSelection: () => ed.getModel()?.getValueInRange(ed.getSelection()) ?? '',
+        replaceSelection: (text) => ed.executeEdits('plugin', [{
+          range: ed.getSelection(), text: text ?? '', forceMoveMarkers: true,
         }]),
-        getLanguage: () => window.editor.getModel()?.getLanguageId() ?? 'plaintext',
-        setLanguage: (lang) => monaco.editor.setModelLanguage(window.editor.getModel(), lang),
+        getLanguage: () => ed.getModel()?.getLanguageId() ?? 'plaintext',
+        setLanguage: (lang) => {
+          const m = ed.getModel();
+          if (m) monaco.editor.setModelLanguage(m, lang);
+        },
+        getCursorPosition: () => {
+          const p = ed.getPosition();
+          return p ? { line: p.lineNumber, column: p.column } : { line: 1, column: 1 };
+        },
+        formatDocument: () => ed.getAction('editor.action.formatDocument')?.run(),
+        format: () => ed.getAction('editor.action.formatDocument')?.run(),
+        addAction: (action) => {
+          if (!action || !action.id || typeof action.run !== 'function') return;
+          ed.addAction({
+            id: action.id,
+            label: action.label || action.id,
+            keybindings: Array.isArray(action.keybindings) ? action.keybindings : [],
+            run: () => { try { action.run(); } catch(e) { console.error('[Plugin action]', e); } },
+          });
+        },
         addCommand: (cmd) => {
+          if (!cmd || typeof cmd.run !== 'function') return;
           if (cmd.keybinding && monaco.KeyCode[cmd.keybinding]) {
-            window.editor.addCommand(monaco.KeyCode[cmd.keybinding], cmd.run);
+            ed.addCommand(monaco.KeyCode[cmd.keybinding], cmd.run);
+          }
+          if (cmd.id && cmd.label) {
+            ed.addAction({
+              id: cmd.id,
+              label: cmd.label,
+              keybindings: [],
+              run: () => { try { cmd.run(); } catch(e) { console.error('[Plugin cmd]', e); } },
+            });
           }
         },
-        onDidChangeContent: (fn) => window.editor.onDidChangeModelContent(() => fn(window.editor.getValue())),
+        onDidChangeContent: (fn) => ed.onDidChangeModelContent(() => {
+          try { fn(ed.getValue()); } catch(_) {}
+        }),
+        // Aliases used by docs/plugin-api.md and plugin-docs.html
+        getText: () => ed.getValue(),
+        setText: (v) => ed.setValue(v ?? ''),
+        insertText: (text) => ed.executeEdits('plugin', [{
+          range: ed.getSelection(), text: text ?? '', forceMoveMarkers: true,
+        }]),
       },
       ui: {
-        showMessage: (text) => _toast(text, false),
-        showError: (text) => _toast(text, true),
+        showMessage: (text) => _toast(String(text ?? ''), false),
+        showError: (text) => _toast(String(text ?? ''), true),
+        showInputBox: (opts) => Promise.resolve(window.prompt(
+          (opts && (opts.title || opts.placeholder)) || '',
+          (opts && opts.value) || ''
+        )),
+        showQuickPick: (items) => {
+          if (!Array.isArray(items) || items.length === 0) return Promise.resolve(null);
+          const choice = window.prompt('Choose:\n' + items.map((it, i) => `${i + 1}. ${it}`).join('\n'));
+          const idx = parseInt(choice, 10) - 1;
+          return Promise.resolve(idx >= 0 && idx < items.length ? items[idx] : null);
+        },
         addStatusBarItem: (item) => {
           _statusItems.push(item);
           if (window.flutter_inappwebview) {
@@ -276,8 +332,14 @@ require(['vs/editor/editor.main'], function() {
         },
       },
       hooks: {
-        onFileSave: (fn) => _hooks.fileSave.push(fn),
-        onFileOpen: (fn) => _hooks.fileOpen.push(fn),
+        onFileSave: (fn) => { _hooks.fileSave.push(fn); _saveHandlers.push(fn); },
+        onSave: (fn) => { _hooks.fileSave.push(fn); _saveHandlers.push(fn); },
+        onFileOpen: (fn) => { _hooks.fileOpen.push(fn); _openHandlers.push(fn); },
+        onChange: (fn) => {
+          _changeHandlers.push(fn);
+          ed.onDidChangeModelContent(() => { try { fn(ed.getValue()); } catch(_) {} });
+        },
+        onCursorMove: (fn) => { _cursorHandlers.push(fn); },
         onEditorReady: (fn) => setTimeout(fn, 0),
       },
       storage: {
@@ -286,11 +348,14 @@ require(['vs/editor/editor.main'], function() {
         remove: (k) => localStorage.removeItem(prefix + k),
       },
       http: {
-        get: (url) => fetch(url).then(r => r.text()),
+        get: (url, headers = {}) => fetch(url, { headers }).then(async r => ({
+          status: r.status, body: await r.text(),
+        })),
         post: (url, body, headers = {}) => fetch(url, {
-          method: 'POST', body,
-          headers: { 'Content-Type': 'application/json', ...headers }
-        }).then(r => r.text()),
+          method: 'POST',
+          body: typeof body === 'string' ? body : JSON.stringify(body ?? {}),
+          headers: { 'Content-Type': 'application/json', ...headers },
+        }).then(async r => ({ status: r.status, body: await r.text() })),
       },
     };
   }

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../services/tor_service.dart';
 
@@ -30,13 +29,47 @@ class ClimService {
     int maxTokens = 2048,
   }) async {
     final dio = _buildDio(apiKey);
-    final response = await dio.post('/v1/messages', data: {
-      'model': model,
-      'messages': messages,
-      'max_tokens': maxTokens,
-    });
+    Response response;
+    try {
+      response = await dio.post(
+        '/v1/messages',
+        data: {
+          'model': model,
+          'messages': messages,
+          'max_tokens': maxTokens,
+        },
+        options: Options(validateStatus: (_) => true),
+      );
+    } on DioException catch (e) {
+      throw Exception('Network error: ${e.message ?? e.type.name}');
+    }
+
+    final status = response.statusCode ?? 0;
     final data = response.data;
-    return (data['content'] as List).first['text'] as String;
+
+    if (status < 200 || status >= 300) {
+      String message = 'HTTP $status';
+      if (data is Map) {
+        final err = data['error'];
+        if (err is Map && err['message'] is String) {
+          message = '${err['type'] ?? 'error'}: ${err['message']}';
+        } else if (data['message'] is String) {
+          message = data['message'] as String;
+        }
+      }
+      throw Exception(message);
+    }
+
+    if (data is! Map) throw Exception('Unexpected response shape');
+    final content = data['content'];
+    if (content is! List || content.isEmpty) {
+      throw Exception('Empty response from API');
+    }
+    final first = content.first;
+    if (first is! Map || first['text'] is! String) {
+      throw Exception('Unexpected content block shape');
+    }
+    return first['text'] as String;
   }
 
   static Future<String> explainCode({

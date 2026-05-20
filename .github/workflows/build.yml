@@ -51,6 +51,9 @@ jobs:
       - name: Install npm deps and bundle Monaco Editor
         run: npm install && npm run build:monaco
 
+      - name: Fetch proot binaries for all ABIs
+        run: bash scripts/fetch-proot.sh
+
       - name: Install Flutter dependencies
         run: flutter pub get
 

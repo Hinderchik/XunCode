@@ -4,11 +4,13 @@
 .flutter-plugins-dependencies
 .packages
 build/
+.claude
 
 # Android
 android/.gradle/
 android/local.properties
 android/app/debug.keystore
+android/app/src/main/jniLibs/*/libproot.so
 *.apk
 *.aab
 keystore.jks

@@ -181,6 +181,14 @@ Enable Tor in Settings. Requires [Orbot](https://play.google.com/store/apps/deta
 ---
 
 
+## Author & Community
+
+- GitHub: [@Hinderchik](https://github.com/Hinderchik)
+- Dev channel: [t.me/XunKal1Dev](https://t.me/XunKal1Dev)
+- Community channel: [t.me/GodPassTGK](https://t.me/GodPassTGK)
+
+---
+
 ## License
 
 MIT
