@@ -7,6 +7,7 @@ import '../models/settings_model.dart';
 import '../services/github_oauth_service.dart';
 import 'about_screen.dart';
 import 'github_signin_screen.dart';
+import 'installed_plugins_screen.dart';
 import 'plugin_docs_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -85,6 +86,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _section('Sync'),
           _buildGithubSync(),
           _section('Plugins'),
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.extension_outlined, size: 18, color: VscodeTheme.accent),
+            title: const Text('Installed Plugins',
+              style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: const Text('Manage, reload, or uninstall',
+              style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            trailing: const Icon(Icons.chevron_right, size: 16, color: VscodeTheme.fgMuted),
+            onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const InstalledPluginsScreen())),
+          ),
           ListTile(
             tileColor: VscodeTheme.bgSidebar,
             dense: true,
