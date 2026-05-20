@@ -1,6 +1,6 @@
 # VScode Mobile for Android
 
-[![Build APK](https://github.com/Hinderchik/VScode-for-android/actions/workflows/build.yml/badge.svg)](https://github.com/Hinderchik/VScode-for-android/actions/workflows/build.yml)
+[![Build APK](https://github.com/Hinderchik/VScodeMobile/actions/workflows/build.yml/badge.svg)](https://github.com/Hinderchik/VScodeMobile/actions/workflows/build.yml)
 
 A native Android code editor built with Flutter — Monaco Editor, Clim AI assistant, Plugin Marketplace, and Tor proxy support. Designed to look and feel like VS Code.
 
@@ -31,8 +31,8 @@ A native Android code editor built with Flutter — Monaco Editor, Clim AI assis
 
 ## Download
 
-- **Latest debug APK** — [GitHub Actions artifacts](https://github.com/Hinderchik/VScode-for-android/actions)
-- **Release APK** — [GitHub Releases](https://github.com/Hinderchik/VScode-for-android/releases)
+- **Latest debug APK** — [GitHub Actions artifacts](https://github.com/Hinderchik/VScodeMobile/actions)
+- **Release APK** — [GitHub Releases](https://github.com/Hinderchik/VScodeMobile/releases)
 
 Requires Android 8.0+ (API 26).
 
@@ -50,8 +50,8 @@ Requires Android 8.0+ (API 26).
 
 ```sh
 # Clone
-git clone https://github.com/Hinderchik/VScode-for-android.git
-cd VScode-for-android
+git clone https://github.com/Hinderchik/VScodeMobile.git
+cd VScodeMobile
 
 # Bundle Monaco Editor assets
 npm install
