@@ -33,15 +33,21 @@ class TerminalService(private val appContext: Context) {
     }
 
     fun downloadProot(): String {
-        val arch = when (android.os.Build.SUPPORTED_ABIS.firstOrNull()) {
+        // proot-me/proot-static-build is upstream's own static-build release.
+        // termux/proot-static is a Termux-maintained mirror of the same binaries
+        // with slightly different naming; useful as fallback when the upstream
+        // release is missing assets for some ABI.
+        val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
+        val proot = when (abi) {
             "arm64-v8a" -> "proot-aarch64"
             "armeabi-v7a" -> "proot-armv7a"
             "x86_64" -> "proot-x86_64"
+            "x86" -> "proot-x86"
             else -> "proot-aarch64"
         }
         val mirrors = listOf(
-            "https://github.com/proot-me/proot-static-build/releases/download/v5.4.0/$arch",
-            "https://github.com/termux/proot/releases/download/v5.4.0/$arch",
+            "https://github.com/proot-me/proot-static-build/releases/download/v5.4.0/$proot",
+            "https://github.com/proot-me/proot-static-build/releases/latest/download/$proot",
         )
         val out = fallbackProotBinary()
         out.parentFile?.mkdirs()
@@ -57,12 +63,17 @@ class TerminalService(private val appContext: Context) {
                     conn.inputStream.use { input ->
                         out.outputStream().use { output -> input.copyTo(output) }
                     }
+                    if (out.length() < 1024) {
+                        out.delete()
+                        lastError = "downloaded file too small from $url"
+                        continue
+                    }
                     out.setExecutable(true, false)
                     return "ok"
                 }
-                lastError = "HTTP ${conn.responseCode}"
+                lastError = "HTTP ${conn.responseCode} from $url"
             } catch (t: Throwable) {
-                lastError = t.message
+                lastError = "${t.javaClass.simpleName}: ${t.message}"
             }
         }
         return "error: ${lastError ?: "unknown"}"
@@ -109,6 +120,18 @@ class TerminalService(private val appContext: Context) {
         val session = TerminalSession(this, id, 80, 24, sink, useSystemSh = true)
         sessions[id] = session
         return session.start()
+    }
+
+    /**
+     * Where the limited shell should land. Prefer /sdcard if readable —
+     * otherwise the app's filesDir (always accessible).
+     */
+    fun appExternalHome(): String {
+        val sdcard = File("/sdcard")
+        if (sdcard.canRead()) return sdcard.absolutePath
+        val ext = appContext.getExternalFilesDir(null)
+        if (ext != null && ext.canRead()) return ext.absolutePath
+        return appContext.filesDir.absolutePath
     }
 }
 
@@ -179,13 +202,17 @@ class TerminalSession(
 
     private fun startSystemSh(): String {
         return try {
+            val home = service.appExternalHome()
             val pb = ProcessBuilder("/system/bin/sh")
+            pb.directory(File(home))
             pb.environment().apply {
-                put("HOME", service.rootfsDir().absolutePath)
+                put("HOME", home)
+                put("PWD", home)
                 put("TERM", "xterm-256color")
                 put("PS1", "$ ")
                 put("COLUMNS", cols.toString())
                 put("LINES", rows.toString())
+                put("PATH", "/sbin:/system/sbin:/system/bin:/system/xbin:/vendor/bin:/vendor/xbin")
             }
             pb.redirectErrorStream(true)
             val p = pb.start()
@@ -194,7 +221,13 @@ class TerminalSession(
             readerThread = Thread({ pumpOutput(p) }, "term-$id-reader").apply {
                 isDaemon = true; start()
             }
-            emit("[terminal] running in unsandboxed mode (/system/bin/sh)\n")
+            emit(buildString {
+                append("[terminal] limited Android shell — proot not available\n")
+                append("Working directory: $home\n")
+                append("Available: ls, cat, ps, busybox subset.\n")
+                append("python / apt are NOT available here. For a full Linux shell,\n")
+                append("retry the proot download from the Terminal panel.\n\n")
+            })
             "ok"
         } catch (t: Throwable) {
             emit("[terminal] system sh failed: ${t.message}\n")

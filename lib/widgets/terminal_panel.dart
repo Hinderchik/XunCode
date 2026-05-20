@@ -36,19 +36,10 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   Future<void> _bootstrap() async {
     final hasProot = await TerminalBridge.prootExists();
     if (!hasProot) {
-      // Try to download it on the fly. Falls back to /system/bin/sh below.
-      setState(() {
-        _installing = true;
-        _installStage = 'Downloading proot';
-        _installProgress = 0;
-      });
-      final r = await TerminalBridge.downloadProot();
-      if (mounted) setState(() => _installing = false);
-      if (r != 'ok') {
-        // Final fallback — unsandboxed shell with a banner.
-        await _newUnsandboxedTab();
-        return;
-      }
+      // Try to download. Don't auto-fallback to /system/bin/sh — surface the
+      // failure with explicit Retry / Use limited shell buttons instead.
+      final ok = await _downloadProot();
+      if (!ok) return; // _installError is set; UI shows the error panel
     }
     final installed = await TerminalBridge.isAlpineInstalled();
     if (!installed) {
@@ -56,6 +47,25 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
       if (_installError != null) return;
     }
     await _newTab();
+  }
+
+  Future<bool> _downloadProot() async {
+    setState(() {
+      _installing = true;
+      _installStage = 'Downloading proot';
+      _installProgress = 0;
+      _installError = null;
+    });
+    final r = await TerminalBridge.downloadProot();
+    if (!mounted) return false;
+    setState(() => _installing = false);
+    if (r != 'ok') {
+      setState(() {
+        _installError = 'proot download failed: ${r.replaceFirst('error: ', '')}';
+      });
+      return false;
+    }
+    return true;
   }
 
   Future<void> _installAlpine() async {
@@ -248,18 +258,44 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
           Text(_installError ?? '',
             textAlign: TextAlign.center,
             style: const TextStyle(color: VscodeTheme.fg, fontSize: 12)),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.refresh, size: 14),
-            label: const Text('Retry'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: VscodeTheme.accent,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              setState(() => _installError = null);
-              _bootstrap();
-            },
+          const SizedBox(height: 4),
+          const Text(
+            'A full Linux shell needs proot. The "limited shell" works without '
+            'it but lacks python, apt, and most tools.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.refresh, size: 14),
+                label: const Text('Retry download proot'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: VscodeTheme.accent,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () {
+                  setState(() => _installError = null);
+                  _bootstrap();
+                },
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.terminal, size: 14),
+                label: const Text('Use limited shell'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: VscodeTheme.fgMuted,
+                  side: const BorderSide(color: VscodeTheme.border),
+                ),
+                onPressed: () async {
+                  setState(() => _installError = null);
+                  await _newUnsandboxedTab();
+                },
+              ),
+            ],
           ),
         ],
       ),
