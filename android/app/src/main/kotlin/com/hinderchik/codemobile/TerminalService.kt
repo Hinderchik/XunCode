@@ -1,6 +1,7 @@
-package com.vscode.android
+package com.hinderchik.codemobile
 
 import android.content.Context
+import android.os.Environment
 import io.flutter.plugin.common.EventChannel
 import java.io.BufferedReader
 import java.io.File
@@ -13,18 +14,39 @@ import java.util.concurrent.ConcurrentHashMap
  * native proot process whose stdin/stdout is bridged to Dart via
  * MethodChannel (write/resize/kill) and EventChannel (output stream).
  *
- * Because Android forbids exec() from /data/data on API 29+, the proot ELF is
- * shipped as android/app/src/main/jniLibs/<abi>/libproot.so and resolved at
- * runtime via applicationInfo.nativeLibraryDir. The Alpine rootfs is unpacked
- * to filesDir/alpine on the Dart side using the `archive` package.
+ * Storage layout:
+ *  - Private:  context.getExternalFilesDir(null)
+ *      = /storage/emulated/0/Android/data/<pkg>/files/
+ *  - Shared:   <external>/Shared/CodeMobile/
+ *      = /storage/emulated/0/Shared/CodeMobile/   (created via Environment)
  */
 class TerminalService(private val appContext: Context) {
 
     private val sessions = ConcurrentHashMap<String, TerminalSession>()
 
-    fun rootfsDir(): File = File(appContext.filesDir, "alpine")
+    /** Private app data root: /storage/emulated/0/Android/data/<pkg>/files. */
+    fun appDataDir(): File {
+        val ext = appContext.getExternalFilesDir(null)
+            ?: appContext.filesDir
+        if (!ext.exists()) ext.mkdirs()
+        return ext
+    }
 
-    private fun fallbackProotBinary(): File = File(appContext.filesDir, "bin/proot")
+    /** User-visible projects root, persists when the app is uninstalled. */
+    fun sharedDir(): File {
+        val external = Environment.getExternalStorageDirectory()
+        val dir = File(external, "Shared/CodeMobile")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    fun rootfsDir(): File {
+        val d = File(appDataDir(), "rootfs")
+        if (!d.exists()) d.mkdirs()
+        return d
+    }
+
+    private fun fallbackProotBinary(): File = File(appDataDir(), "proot/proot")
 
     fun prootBinary(): File {
         val native = File(appContext.applicationInfo.nativeLibraryDir, "libproot.so")
@@ -123,12 +145,12 @@ class TerminalService(private val appContext: Context) {
     }
 
     /**
-     * Where the limited shell should land. Prefer /sdcard if readable —
-     * otherwise the app's filesDir (always accessible).
+     * Where the limited shell should land. Prefer the user-visible Shared
+     * folder if reachable, then external app dir, finally internal filesDir.
      */
     fun appExternalHome(): String {
-        val sdcard = File("/sdcard")
-        if (sdcard.canRead()) return sdcard.absolutePath
+        val shared = sharedDir()
+        if (shared.canRead()) return shared.absolutePath
         val ext = appContext.getExternalFilesDir(null)
         if (ext != null && ext.canRead()) return ext.absolutePath
         return appContext.filesDir.absolutePath
@@ -165,6 +187,7 @@ class TerminalSession(
             // already 0755 in practice, but this is cheap insurance.
             runCatching { proot.setExecutable(true, false) }
 
+            val shared = service.sharedDir().absolutePath
             val pb = ProcessBuilder(
                 proot.absolutePath,
                 "-r", rootfs.absolutePath,
@@ -174,6 +197,8 @@ class TerminalSession(
                 "-b", "/sys",
                 "-b", "/dev/urandom:/dev/random",
                 "-b", "/proc/self/fd:/dev/fd",
+                "-b", "$shared:/sdcard/CodeMobile",
+                "-b", "$shared:/home/user",
                 "-0",
                 "/bin/sh", "-l",
             )
@@ -183,7 +208,8 @@ class TerminalSession(
                 put("PS1", "alpine:\\w# ")
                 put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
                 put("LANG", "C.UTF-8")
-                put("PROOT_TMP_DIR", File(service.rootfsDir(), "tmp").absolutePath)
+                put("PROOT_TMP_DIR", File(service.appDataDir(), "tmp").absolutePath)
+                put("CODE_MOBILE_HOME", "/sdcard/CodeMobile")
                 put("COLUMNS", cols.toString())
                 put("LINES", rows.toString())
             }

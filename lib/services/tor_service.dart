@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 
 class TorService {
-  static const _channel = MethodChannel('com.vscode.android/tor');
+  static const _channel = MethodChannel('com.hinderchik.codemobile/tor');
   static bool _running = false;
 
   static bool get isRunning => _running;

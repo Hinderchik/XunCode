@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 class SearchResult {
@@ -33,37 +36,117 @@ class FileNode {
   });
 }
 
+/// File-system entry points for CodeMobile.
+///
+/// Layout (Android 11+, no extra permissions):
+///   privateRoot  = /storage/emulated/0/Android/data/com.hinderchik.codemobile/files
+///                    ├── plugins/    cache/    rootfs/    proot/
+///                    ├── prefs/      database/ logs/      tmp/
+///   sharedRoot   = /storage/emulated/0/Shared/CodeMobile
+///                    ├── Projects/   Downloads/  Backups/  Exports/
+///
+/// Both paths are resolved on first call and cached for the lifetime of the
+/// process. Call [FileService.ensureLayout] once at startup to make sure all
+/// subfolders exist; subsequent reads are then synchronous through the
+/// cached String-typed getters.
 class FileService {
-  // App's own data directory — always accessible, no permissions needed
-  static Future<Directory> get appDataDir async {
-    final base = await getApplicationDocumentsDirectory();
-    final dir = Directory('${base.path}/projects');
-    if (!dir.existsSync()) dir.createSync(recursive: true);
-    return dir;
+  static const _channel = MethodChannel('com.hinderchik.codemobile/storage');
+
+  static String? _privateRoot;
+  static String? _sharedRoot;
+  static Completer<void>? _layoutReady;
+
+  /// Idempotent: bootstraps both roots and the subfolder skeleton. Safe to
+  /// call multiple times — the native side mkdirs are no-ops when paths exist.
+  static Future<void> ensureLayout() async {
+    if (_layoutReady != null) return _layoutReady!.future;
+    final c = Completer<void>();
+    _layoutReady = c;
+    try {
+      _privateRoot = await _channel.invokeMethod<String>('appDataDir');
+      _sharedRoot = await _channel.invokeMethod<String>('sharedDir');
+      await _channel.invokeMethod('ensureLayout');
+    } catch (_) {
+      // MethodChannel may not be wired in tests / desktop. Fall back to
+      // path_provider so the rest of the app keeps working.
+      try {
+        final ext = await getExternalStorageDirectory();
+        _privateRoot = ext?.path ?? (await getApplicationDocumentsDirectory()).path;
+      } catch (_) {
+        _privateRoot = (await getApplicationDocumentsDirectory()).path;
+      }
+      _sharedRoot ??= '/storage/emulated/0/Shared/CodeMobile';
+      for (final sub in const [
+        'plugins', 'cache', 'rootfs', 'proot', 'prefs', 'database', 'logs', 'tmp',
+      ]) {
+        await Directory('$_privateRoot/$sub').create(recursive: true);
+      }
+      for (final sub in const ['Projects', 'Downloads', 'Backups', 'Exports']) {
+        try {
+          await Directory('$_sharedRoot/$sub').create(recursive: true);
+        } catch (_) {}
+      }
+    }
+    c.complete();
   }
 
-  // Create a new project folder inside app data
+  static String get privateRoot {
+    final r = _privateRoot;
+    if (r == null) throw StateError('FileService.ensureLayout() not called');
+    return r;
+  }
+
+  static String get sharedRoot {
+    final r = _sharedRoot;
+    if (r == null) throw StateError('FileService.ensureLayout() not called');
+    return r;
+  }
+
+  // Private (Android/data/.../files) subfolders — survive only until uninstall.
+  static String get pluginsDir => '$privateRoot/plugins';
+  static String get cacheDir   => '$privateRoot/cache';
+  static String get rootfsDir  => '$privateRoot/rootfs';
+  static String get prootDir   => '$privateRoot/proot';
+  static String get prefsDir   => '$privateRoot/prefs';
+  static String get dbDir      => '$privateRoot/database';
+  static String get logsDir    => '$privateRoot/logs';
+  static String get tmpDir     => '$privateRoot/tmp';
+
+  // Shared (visible to user, NOT removed on uninstall) subfolders.
+  static String get projectsDir  => '$sharedRoot/Projects';
+  static String get downloadsDir => '$sharedRoot/Downloads';
+  static String get backupsDir   => '$sharedRoot/Backups';
+  static String get exportsDir   => '$sharedRoot/Exports';
+
+  /// Convenience: the user-facing projects folder as a Directory.
+  static Future<Directory> projectsDirectory() async {
+    await ensureLayout();
+    final d = Directory(projectsDir);
+    if (!await d.exists()) await d.create(recursive: true);
+    return d;
+  }
+
+  // ── Project ops (operate on sharedRoot/Projects by default) ───────────────
+
   static Future<String?> createProject(String name) async {
-    final base = await appDataDir;
-    final dir = Directory('${base.path}/$name');
-    if (dir.existsSync()) return null; // already exists
-    dir.createSync(recursive: true);
+    await ensureLayout();
+    final dir = Directory('$projectsDir/$name');
+    if (await dir.exists()) return null;
+    await dir.create(recursive: true);
     return dir.path;
   }
 
-  // Create a new file inside a folder
   static Future<String?> createFile(String folderPath, String name) async {
     final file = File('$folderPath/$name');
-    if (file.existsSync()) return null;
-    file.createSync(recursive: true);
+    if (await file.exists()) return null;
+    await file.create(recursive: true);
     return file.path;
   }
 
-  // Read a file from disk directly (no picker)
   static Future<Map<String, String>?> readFile(String path) async {
     try {
       final file = File(path);
-      if (!file.existsSync()) return null;
+      if (!await file.exists()) return null;
       final content = await file.readAsString();
       return {'path': path, 'name': path.split('/').last, 'content': content};
     } catch (_) {
@@ -71,7 +154,6 @@ class FileService {
     }
   }
 
-  // Import a file from shared storage via picker
   static Future<Map<String, String>?> importFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
@@ -84,7 +166,6 @@ class FileService {
     return {'path': file.path!, 'name': file.name, 'content': content};
   }
 
-  // Import a folder from shared storage via picker
   static Future<String?> importFolder() async {
     return FilePicker.platform.getDirectoryPath();
   }
@@ -95,18 +176,18 @@ class FileService {
 
   static Future<void> deleteFile(String path) async {
     final f = File(path);
-    if (f.existsSync()) f.deleteSync();
+    if (await f.exists()) await f.delete();
   }
 
   static Future<void> deleteFolder(String path) async {
     final d = Directory(path);
-    if (d.existsSync()) d.deleteSync(recursive: true);
+    if (await d.exists()) await d.delete(recursive: true);
   }
 
   static Future<void> renameNode(String oldPath, String newName) async {
     final parent = File(oldPath).parent.path;
     final newPath = '$parent/$newName';
-    final type = FileSystemEntity.typeSync(oldPath);
+    final type = await FileSystemEntity.type(oldPath);
     if (type == FileSystemEntityType.file) {
       await File(oldPath).rename(newPath);
     } else {
@@ -174,7 +255,7 @@ class FileService {
     }
 
     final dir = Directory(root);
-    if (dir.existsSync()) {
+    if (await dir.exists()) {
       await walk(dir);
     }
     return results;

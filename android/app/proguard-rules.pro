@@ -27,7 +27,7 @@
 -keep class kotlinx.** { *; }
 
 # App's own native bridge — referenced by name from Dart MethodChannels
--keep class com.vscode.android.** { *; }
+-keep class com.hinderchik.codemobile.** { *; }
 
 # Native methods
 -keepclasseswithmembernames class * {

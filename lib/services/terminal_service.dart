@@ -4,14 +4,15 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'file_service.dart';
 
 /// Bridge to the native [TerminalService.kt]. Each [TerminalSession] owns one
 /// proot+Alpine shell process; output is pushed via an EventChannel and writes
 /// go through a MethodChannel.
 class TerminalBridge {
-  static const _method = MethodChannel('com.vscode.android/terminal');
-  static const _events = EventChannel('com.vscode.android/terminal/events');
+  static const _method = MethodChannel('com.hinderchik.codemobile/terminal');
+  static const _events = EventChannel('com.hinderchik.codemobile/terminal/events');
 
   static Future<bool> isAlpineInstalled() async {
     final v = await _method.invokeMethod<bool>('isAlpineInstalled');
@@ -63,9 +64,11 @@ class TerminalBridge {
     final url = 'https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/$arch/'
         'alpine-minirootfs-3.20.3-$arch.tar.gz';
 
-    final tmpDir = await getTemporaryDirectory();
-    final gzPath = '${tmpDir.path}/alpine-minirootfs.tar.gz';
-    final tarPath = '${tmpDir.path}/alpine-minirootfs.tar';
+    await FileService.ensureLayout();
+    final tmpRoot = Directory(FileService.tmpDir);
+    if (!await tmpRoot.exists()) await tmpRoot.create(recursive: true);
+    final gzPath = '${tmpRoot.path}/alpine-minirootfs.tar.gz';
+    final tarPath = '${tmpRoot.path}/alpine-minirootfs.tar';
 
     await _silent(() => File(gzPath).delete());
     await _silent(() => File(tarPath).delete());

@@ -20,7 +20,7 @@ apply plugin: 'kotlin-android'
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
-    namespace "com.vscode.android"
+    namespace "com.hinderchik.codemobile"
     compileSdkVersion 35
     ndkVersion "25.1.8937393"
 
@@ -38,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.vscode.android"
+        applicationId "com.hinderchik.codemobile"
         minSdkVersion 26
         targetSdkVersion 35
         versionCode flutterVersionCode.toInteger()

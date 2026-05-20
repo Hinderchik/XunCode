@@ -1,4 +1,4 @@
-package com.vscode.android
+package com.hinderchik.codemobile
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -6,9 +6,10 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val TOR_CHANNEL = "com.vscode.android/tor"
-    private val TERMINAL_CHANNEL = "com.vscode.android/terminal"
-    private val TERMINAL_EVENTS = "com.vscode.android/terminal/events"
+    private val TOR_CHANNEL = "com.hinderchik.codemobile/tor"
+    private val TERMINAL_CHANNEL = "com.hinderchik.codemobile/terminal"
+    private val TERMINAL_EVENTS = "com.hinderchik.codemobile/terminal/events"
+    private val STORAGE_CHANNEL = "com.hinderchik.codemobile/storage"
 
     private lateinit var terminalService: TerminalService
     private val sinks = mutableMapOf<String, EventChannel.EventSink>()
@@ -119,6 +120,25 @@ class MainActivity : FlutterActivity() {
                 }
             }
         )
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, STORAGE_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "appDataDir" -> result.success(terminalService.appDataDir().absolutePath)
+                "sharedDir" -> result.success(terminalService.sharedDir().absolutePath)
+                "ensureLayout" -> {
+                    runCatching {
+                        val app = terminalService.appDataDir()
+                        listOf("plugins", "cache", "rootfs", "proot", "prefs", "database", "logs", "tmp")
+                            .forEach { java.io.File(app, it).mkdirs() }
+                        val shared = terminalService.sharedDir()
+                        listOf("Projects", "Downloads", "Backups", "Exports")
+                            .forEach { java.io.File(shared, it).mkdirs() }
+                    }
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     override fun onDestroy() {

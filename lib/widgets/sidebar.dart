@@ -44,7 +44,8 @@ class _SidebarState extends State<Sidebar> {
   }
 
   Future<void> _loadAppProjects() async {
-    final dir = await FileService.appDataDir;
+    await FileService.ensureLayout();
+    final dir = await FileService.projectsDirectory();
     setState(() {
       _folderPath = dir.path;
       _folderName = 'PROJECTS';

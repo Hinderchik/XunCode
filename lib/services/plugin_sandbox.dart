@@ -217,7 +217,8 @@ class PluginSandbox {
 
       // workspace
       case 'workspace.getRoot':
-        return (await FileService.appDataDir).path;
+        await FileService.ensureLayout();
+        return FileService.projectsDir;
       case 'workspace.findFiles':
         return _workspaceFindFiles(p['pattern']?.toString() ?? '');
       case 'workspace.openFile':
@@ -272,9 +273,11 @@ class PluginSandbox {
   }
 
   Future<List<String>> _workspaceFindFiles(String pattern) async {
-    final root = await FileService.appDataDir;
+    await FileService.ensureLayout();
+    final root = Directory(FileService.projectsDir);
     final results = <String>[];
     final regex = _globToRegExp(pattern);
+    if (!await root.exists()) return results;
     await for (final entity in root.list(recursive: true, followLinks: false)) {
       if (entity is! File) continue;
       final rel = entity.path.substring(root.path.length + 1);

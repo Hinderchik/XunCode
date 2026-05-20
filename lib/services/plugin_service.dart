@@ -5,10 +5,10 @@ import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/plugin.dart';
+import 'file_service.dart';
 import 'review_service.dart';
 
 class PluginService {
@@ -16,8 +16,15 @@ class PluginService {
   static const _installedKey = 'installed_plugins_v2';
 
   static Future<Directory> _pluginsDir() async {
-    final base = await getApplicationDocumentsDirectory();
-    final dir = Directory('${base.path}/plugins');
+    await FileService.ensureLayout();
+    final dir = Directory(FileService.pluginsDir);
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  static Future<Directory> _tmpDir() async {
+    await FileService.ensureLayout();
+    final dir = Directory(FileService.tmpDir);
     if (!await dir.exists()) await dir.create(recursive: true);
     return dir;
   }
@@ -63,7 +70,7 @@ class PluginService {
 
   static Future<InstalledPlugin> installFromGithub(String githubUrl) async {
     final cleaned = _cleanGithubUrl(githubUrl);
-    final tmpDir = await getTemporaryDirectory();
+    final tmpDir = await _tmpDir();
     final stamp = DateTime.now().microsecondsSinceEpoch;
     final zipFile = File('${tmpDir.path}/plugin-$stamp.zip');
 

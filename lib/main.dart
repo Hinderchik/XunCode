@@ -3,11 +3,14 @@ import 'package:provider/provider.dart';
 import 'app/theme.dart';
 import 'models/settings_model.dart';
 import 'models/open_file.dart';
+import 'services/file_service.dart';
 import 'services/settings_service.dart';
 import 'screens/editor_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Bootstrap storage layout before anything tries to read it.
+  await FileService.ensureLayout();
   final settings = SettingsService();
   await settings.init();
   runApp(
