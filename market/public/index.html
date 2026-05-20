@@ -22,6 +22,16 @@
     align-items: center;
   }
   header h1 { color: #569cd6; font-size: 20px; font-weight: 600; }
+  header .market-url {
+    color: #4fc1ff;
+    text-decoration: none;
+    font-size: 12px;
+    margin-left: 16px;
+    padding: 4px 10px;
+    background: #1a3a4a;
+    border-radius: 12px;
+  }
+  header .market-url:hover { background: #1f4a5e; }
   header .nav { margin-left: auto; }
   header .nav button {
     background: #2d2d2d;
@@ -104,6 +114,7 @@
 
 <header>
   <h1>VScode Mobile Plugins</h1>
+  <a href="https://vscodemobile-market.vercel.app" class="market-url" target="_blank">vscodemobile-market.vercel.app</a>
   <div class="nav">
     <button class="active" data-tab="browse">Browse</button>
     <button data-tab="submit">Submit</button>
@@ -245,10 +256,15 @@
     if (!key) return toast('Enter API key');
     const list = document.getElementById('pending-list');
     list.innerHTML = '<div class="empty">Loading…</div>';
-    // No "list pending" endpoint — admin pulls the static file directly.
     try {
-      const r = await fetch('/data/pending.json');
-      if (!r.ok) throw new Error('cannot read pending.json');
+      const r = await fetch('/api/admin/pending', {
+        headers: { 'x-admin-key': key },
+      });
+      if (r.status === 401) {
+        list.innerHTML = '<div class="empty">Invalid API key.</div>';
+        return;
+      }
+      if (!r.ok) throw new Error('failed');
       const items = await r.json();
       if (!items.length) {
         list.innerHTML = '<div class="empty">No pending submissions.</div>';

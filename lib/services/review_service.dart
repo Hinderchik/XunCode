@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/plugin.dart';
 
 class ReviewService {
-  static const _apiBase = 'https://vscode-mobile-plugins.vercel.app';
+  static const _apiBase = 'https://vscodemobile-market.vercel.app';
   static const _tokenKey = 'review_user_token';
 
   static Future<String> getUserToken() async {
@@ -28,7 +28,7 @@ class ReviewService {
 
   static Future<List<Review>> fetchReviews(String pluginId) async {
     try {
-      final uri = Uri.parse('$_apiBase/api/plugins/reviews?id=$pluginId');
+      final uri = Uri.parse('$_apiBase/api/plugins/review?id=$pluginId');
       final res = await http.get(uri).timeout(const Duration(seconds: 15));
       if (res.statusCode != 200) return [];
       final body = jsonDecode(res.body);

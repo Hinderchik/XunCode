@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/plugin.dart';
 
 class PluginService {
-  static const _apiBase = 'https://vscode-mobile-plugins.vercel.app';
+  static const _apiBase = 'https://vscodemobile-market.vercel.app';
   static const _installedKey = 'installed_plugins_v2';
 
   static Future<Directory> _pluginsDir() async {

@@ -2,7 +2,9 @@
 
 [![Build APK](https://github.com/Hinderchik/VScodeMobile/actions/workflows/build.yml/badge.svg)](https://github.com/Hinderchik/VScodeMobile/actions/workflows/build.yml)
 
-A native Android code editor built with Flutter — Monaco Editor, Clim AI assistant, Plugin Marketplace, and Tor proxy support. Designed to look and feel like VS Code.
+A native Android code editor built with Flutter — Monaco Editor, GitHub-based plugin system, plugin marketplace with reviews, and Tor proxy support. Designed to look and feel like VS Code.
+
+**Marketplace:** [vscodemobile-market.vercel.app](https://vscodemobile-market.vercel.app)
 
 ---
 
@@ -13,19 +15,17 @@ A native Android code editor built with Flutter — Monaco Editor, Clim AI assis
 | Monaco Editor | Same engine as VS Code — syntax highlighting for 25+ languages |
 | IntelliSense | Code completion, hints, and navigation support |
 | Go to Definition | Jump to symbols and references inside code |
-| VSCode UI | Activity bar, sidebar, tabs, status bar, bottom Clim panel |
+| VSCode UI | Activity bar, sidebar, tabs, status bar |
 | File Tools | Project tree, search across files, Git, FTP/SFTP support |
-| Clim AI | Chat, Explain, Complete — powered by Anthropic Claude |
-| Cline-like AI Agent | Read, create, edit code, and launch terminal tasks |
+| Plugin System | GitHub-based, sandboxed JS runtime with editor / fs / ui / http / hooks API |
+| Plugin Marketplace | Browse, install, rate and review community plugins |
+| Embedded Terminal | proot + Alpine, auto-fetched at first run, falls back to system shell |
 | Proxy Stack | HTTP/HTTPS, SOCKS5, Tor via Orbot, system proxy, fallback chain |
 | Run Code | Python, JS/Node.js, PHP, HTML/CSS live preview, Java, C/C++ |
-| Plugin System | One-click install, JS/TS SDK, command and button APIs |
-| Plugin Marketplace | Browse & install community plugins from Vercel-hosted site |
 | Developer Mode | Test plugins locally without publishing |
 | Mobile UX | Physical keyboard support and popup Ctrl/Alt/Shift keyboard |
-| Offline First | Works offline for everything except AI and Git push |
-| Settings | Theme, font, tab size, word wrap, auto save, API key, AI model |
-
+| Offline First | Works offline for everything except plugin install and Git push |
+| Settings | Theme, font, tab size, word wrap, auto save, plugin docs |
 
 ---
 
@@ -57,6 +57,9 @@ cd VScodeMobile
 npm install
 npm run build:monaco
 
+# Fetch the proot static binaries (terminal sandbox)
+bash scripts/fetch-proot.sh
+
 # Flutter deps
 flutter pub get
 
@@ -80,54 +83,72 @@ GitHub Actions builds and publishes the release APK automatically.
 
 ## Plugin System
 
-Plugins are single JavaScript files that run inside the Monaco WebView sandbox. Install from the Marketplace or load any URL directly.
+Plugins are public GitHub repositories with two files in the root: `plugin.json` (manifest) and `main.js` (code). Each plugin runs in its own sandboxed `InAppWebView` and gets a `vscode` API surface.
 
 ### Minimal plugin
 
 ```js
-VscodePlugin.register({
-  id: 'my-org.my-plugin',
-  name: 'My Plugin',
-  version: '1.0.0',
-  description: 'Does something cool',
-  author: 'you',
-
-  activate(ctx) {
-    ctx.editor.addAction({
-      id: 'my-plugin.hello',
-      label: 'My Plugin: Hello',
-      run() { ctx.ui.showMessage('Hello from My Plugin!'); }
-    });
-  },
-
-  deactivate() {}
-});
+exports.activate = (vscode) => {
+  vscode.commands.registerCommand('hello.say', () => {
+    vscode.ui.showMessage('Hello from plugin!');
+  });
+};
 ```
 
 ### Plugin API surface
 
 | Namespace | Methods |
 |---|---|
-| `ctx.editor` | `getText`, `setText`, `getSelection`, `insertText`, `getCursorPosition`, `getLanguage`, `setLanguage`, `formatDocument`, `addAction` |
-| `ctx.ui` | `showMessage`, `showError`, `showInputBox`, `showQuickPick` |
-| `ctx.hooks` | `onSave`, `onFileOpen`, `onChange`, `onCursorMove` |
-| `ctx.storage` | `get`, `set`, `remove` |
-| `ctx.http` | `get`, `post` (Tor-aware) |
+| `vscode.editor` | `getText`, `setText`, `getSelection`, `setSelection`, `insertText`, `replaceRange`, `getLine`, `getLines`, `getLanguage`, `setLanguage`, `formatDocument`, `getCursorPosition`, `setCursorPosition`, `executeCommand` |
+| `vscode.fs` | `readFile`, `writeFile`, `delete`, `exists`, `listDir`, `watch` |
+| `vscode.workspace` | `getRoot`, `openFile`, `findFiles`, `onDidSaveFile`, `onDidOpenFile` |
+| `vscode.ui` | `showMessage`, `showError`, `showInputBox`, `showQuickPick`, `showProgress`, `createStatusBarItem`, `createWebViewPanel` |
+| `vscode.commands` | `registerCommand`, `executeCommand` |
+| `vscode.terminal` | `create`, `runCommand` |
+| `vscode.http` | `get`, `post` (Tor-aware) |
+| `vscode.storage` | `get`, `set`, `delete`, `clear` (per-plugin namespace) |
+| `vscode.hooks` | `onSave`, `onFileOpen`, `onEditorChange`, `onCursorMove`, `onSettingsChange` |
 
-Full reference: [docs/plugin-api.md](docs/plugin-api.md) · also available in-app under Extensions → API Docs.
+Full reference: in-app under Settings → Plugins → Документация по плагинам · or [assets/plugin-docs.html](assets/plugin-docs.html).
 
 ### Developer Mode
 
 1. Settings → Developer Mode → ON
 2. Settings → Developer → Load Local Plugin
-3. Paste your plugin JS → runs immediately in the editor sandbox
+3. Paste your plugin code → runs immediately in the editor sandbox
 
 ### Publishing to Marketplace
 
-1. Host your plugin JS at a public URL
-2. Submit at `https://vscode-mobile-plugins.vercel.app/submit`
-3. Fill in name, description, category, and the raw JS URL
-4. Maintainer reviews and approves — plugin goes live in the app
+1. Push a public GitHub repo with `plugin.json` + `main.js` in the root.
+2. Visit [`vscodemobile-market.vercel.app`](https://vscodemobile-market.vercel.app), open the **Submit** tab.
+3. Fill in name, author, description, plugin ID, GitHub URL.
+4. Maintainer reviews — once approved, your plugin appears in the in-app Marketplace.
+
+A ready-to-test example lives in [`example-plugins/hello-world/`](example-plugins/hello-world).
+
+---
+
+## Marketplace Backend
+
+The marketplace runs on Vercel from the [`market/`](market) directory of this repo.
+
+| Method | Path                       | Purpose                                         |
+|--------|----------------------------|-------------------------------------------------|
+| GET    | `/api/plugins/list`        | All approved plugins, sorted by rating          |
+| GET    | `/api/plugins/info?id=…`   | Single plugin detail                            |
+| GET    | `/api/plugins/review?id=…` | Reviews for a plugin                            |
+| POST   | `/api/plugins/review`      | Add or update a review (requires `userToken`)   |
+| POST   | `/api/admin/submit`        | Submit a GitHub repo for moderation             |
+| POST   | `/api/admin/approve`       | Approve a pending submission (admin key)        |
+
+Local dev:
+
+```sh
+cd market
+npx vercel dev
+```
+
+See [`market/README.md`](market/README.md) for the data layout and storage notes.
 
 ---
 
@@ -138,32 +159,40 @@ lib/
 ├── main.dart                    # App entry, MultiProvider
 ├── app/theme.dart               # VSCode Dark+ color palette
 ├── screens/
-│   ├── editor_screen.dart       # Main layout (activity bar + sidebar + Monaco + Clim + status)
-│   ├── settings_screen.dart     # Full settings screen
-│   ├── marketplace_screen.dart  # Plugin marketplace (Vercel API)
-│   └── plugin_docs_screen.dart  # In-app API docs (WebView)
+│   ├── editor_screen.dart       # Main layout (activity bar + sidebar + Monaco + status)
+│   ├── settings_screen.dart     # Settings + plugin docs link
+│   ├── marketplace_screen.dart  # Plugin marketplace
+│   ├── plugin_details_screen.dart # Reviews, ratings, install/uninstall
+│   └── plugin_docs_screen.dart  # In-app API docs (WebView, RU/EN)
 ├── widgets/
 │   ├── activity_bar.dart        # Left 48px icon bar
 │   ├── sidebar.dart             # File explorer / search / extensions
 │   ├── tab_bar.dart             # Open file tabs with dirty indicator
 │   ├── status_bar.dart          # Bottom 22px status bar
-│   ├── clim_panel.dart          # AI assistant bottom panel
+│   ├── terminal_panel.dart      # proot + Alpine terminal
 │   └── file_tree.dart           # Recursive file tree
 ├── services/
 │   ├── tor_service.dart         # Orbot broadcast intent + SOCKS5 status
-│   ├── plugin_service.dart      # Install / remove / list plugins
-│   ├── file_service.dart        # SAF file/folder open, save
-│   ├── clim_service.dart        # Anthropic API (chat, explain, complete)
+│   ├── plugin_service.dart      # Install from GitHub, list, uninstall
+│   ├── plugin_sandbox.dart      # Headless WebView + vscode.* API bridge
+│   ├── plugin_runtime.dart      # Active sandboxes registry, hooks fan-out
+│   ├── editor_bridge.dart       # Monaco operations exposed to plugins
+│   ├── review_service.dart      # Marketplace reviews + anonymous user token
+│   ├── file_service.dart        # File / folder open, save, search
+│   ├── terminal_service.dart    # Bridge to TerminalService.kt
 │   └── settings_service.dart    # SharedPreferences wrapper
 └── models/
     ├── settings_model.dart      # ChangeNotifier for settings
-    ├── plugin_model.dart        # Plugin metadata + fromJson
+    ├── plugin.dart              # Plugin / InstalledPlugin / Review
     └── open_file.dart           # Open tabs state
 
-android/app/src/main/kotlin/…/MainActivity.kt   # Tor MethodChannel (startTor/stopTor)
-assets/editor.html                               # Monaco init + VscodePlugin JS runtime
-assets/plugin-docs.html                          # In-app API reference
-docs/plugin-api.md                               # Full plugin API markdown docs
+android/app/src/main/kotlin/.../MainActivity.kt    # Tor + Terminal MethodChannels
+android/app/src/main/kotlin/.../TerminalService.kt # proot + Alpine sessions, downloadProot, /system/bin/sh fallback
+assets/editor.html                                  # Monaco init
+assets/plugin-docs.html                             # In-app API reference (RU/EN)
+assets/plugin-examples/hello-world/                 # Bundled minimal plugin
+example-plugins/hello-world/                        # Same example, easy to clone
+market/                                             # Vercel API + admin UI
 ```
 
 ---
@@ -176,10 +205,9 @@ JavaScript · TypeScript · Python · Kotlin · Java · Dart · Go · Rust · C 
 
 ## Tor Support
 
-Enable Tor in Settings. Requires [Orbot](https://play.google.com/store/apps/details?id=org.torproject.android) installed on the device. When active, all Clim AI requests and plugin HTTP calls are routed through SOCKS5 on `127.0.0.1:9050`.
+Enable Tor in Settings. Requires [Orbot](https://play.google.com/store/apps/details?id=org.torproject.android) installed on the device. When active, plugin HTTP calls (`vscode.http.*`) are routed through SOCKS5 on `127.0.0.1:9050`.
 
 ---
-
 
 ## Author & Community
 
