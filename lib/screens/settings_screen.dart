@@ -6,6 +6,8 @@ import '../models/github_user.dart';
 import '../models/settings_model.dart';
 import '../services/file_service.dart';
 import '../services/github_oauth_service.dart';
+import '../services/plugin_runtime.dart';
+import '../services/plugin_service.dart';
 import 'about_screen.dart';
 import 'github_signin_screen.dart';
 import 'installed_plugins_screen.dart';
@@ -339,50 +341,113 @@ class _SettingsScreenState extends State<SettingsScreen> {
   );
 
   Widget _devModePanel(BuildContext ctx) {
-    final ctrl = TextEditingController();
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Load Local Plugin (paste JS code):',
+          const Text('Local plugin install',
             style: TextStyle(color: VscodeTheme.fgLabel, fontSize: 12)),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: VscodeTheme.bgInput,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: VscodeTheme.border),
-            ),
-            child: TextField(
-              controller: ctrl,
-              maxLines: 8,
-              style: const TextStyle(color: VscodeTheme.fg, fontSize: 12, fontFamily: 'monospace'),
-              decoration: const InputDecoration(
-                hintText: '// VscodePlugin.register({ id: "my-plugin", ... })',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.all(10),
-              ),
-            ),
+          const SizedBox(height: 4),
+          const Text(
+            'Pick a folder with plugin.json + main.js (or paste a GitHub URL '
+            'below). The plugin is copied into the app and activated immediately.',
+            style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
           ),
-          const SizedBox(height: 8),
-          ElevatedButton.icon(
-            onPressed: () {
-              // TODO: inject into WebView via navigator key
-              ScaffoldMessenger.of(ctx).showSnackBar(
-                const SnackBar(content: Text('Plugin loaded in editor'),
-                  backgroundColor: VscodeTheme.accent),
-              );
-            },
-            icon: const Icon(Icons.play_arrow, size: 16),
-            label: const Text('Run Plugin'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: VscodeTheme.accent,
-              foregroundColor: Colors.white,
-            ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _installLocalPluginFolder,
+                  icon: const Icon(Icons.folder_open, size: 16),
+                  label: const Text('Pick folder'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: VscodeTheme.bgInput,
+                    foregroundColor: VscodeTheme.fg,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _installFromGithubUrl,
+                  icon: const Icon(Icons.cloud_download, size: 16),
+                  label: const Text('From URL'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: VscodeTheme.accent,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _installFromGithubUrl() async {
+    final ctrl = TextEditingController();
+    final url = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: VscodeTheme.bgSidebar,
+        title: const Text('Install from GitHub',
+          style: TextStyle(color: VscodeTheme.fg, fontSize: 14)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(color: VscodeTheme.fg, fontSize: 13),
+          decoration: const InputDecoration(
+            hintText: 'https://github.com/owner/repo',
+          ),
+          onSubmitted: (v) => Navigator.pop(context, v.trim()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Install', style: TextStyle(color: VscodeTheme.accent)),
+          ),
+        ],
+      ),
+    );
+    if (url == null || url.isEmpty) return;
+    try {
+      final installed = await PluginService.installFromGithub(url);
+      await PluginRuntime.instance.activate(installed);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${installed.name} installed'),
+        backgroundColor: VscodeTheme.accent,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Install failed: $e'),
+        backgroundColor: VscodeTheme.red,
+      ));
+    }
+  }
+
+  Future<void> _installLocalPluginFolder() async {
+    final picked = await FileService.importFolder();
+    if (picked == null) return;
+    try {
+      final installed = await PluginService.installFromLocalFolder(picked);
+      await PluginRuntime.instance.activate(installed);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${installed.name} installed'),
+        backgroundColor: VscodeTheme.accent,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Install failed: $e'),
+        backgroundColor: VscodeTheme.red,
+      ));
+    }
   }
 }

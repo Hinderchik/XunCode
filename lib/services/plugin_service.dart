@@ -88,8 +88,61 @@ class PluginService {
     }
   }
 
-  static Future<InstalledPlugin> installFromGithub(String githubUrl) async {
-    final cleaned = _cleanGithubUrl(githubUrl);
+  static Future<InstalledPlugin> installFromLocalFolder(String folderPath) async {
+    final src = Directory(folderPath);
+    if (!await src.exists()) {
+      throw Exception('folder does not exist');
+    }
+    final manifestFile = File('${src.path}/plugin.json');
+    if (!await manifestFile.exists()) {
+      throw Exception('plugin.json not found in selected folder');
+    }
+    final manifest = jsonDecode(await manifestFile.readAsString());
+    if (manifest is! Map) {
+      throw Exception('plugin.json must be an object');
+    }
+    final id = manifest['id']?.toString();
+    final version = manifest['version']?.toString() ?? '1.0.0';
+    final mainName = manifest['main']?.toString() ?? 'main.js';
+    if (id == null || id.isEmpty) {
+      throw Exception('plugin.json missing required "id"');
+    }
+    final mainFile = File('${src.path}/$mainName');
+    if (!await mainFile.exists()) {
+      throw Exception('main file "$mainName" not found');
+    }
+
+    final pluginsBase = await _pluginsDir();
+    final dest = Directory('${pluginsBase.path}/$id');
+    if (await dest.exists()) await dest.delete(recursive: true);
+    await dest.create(recursive: true);
+
+    await for (final entity in src.list(recursive: true, followLinks: false)) {
+      final rel = entity.path.substring(src.path.length);
+      if (rel.isEmpty) continue;
+      final outPath = '${dest.path}$rel';
+      if (entity is File) {
+        final f = File(outPath);
+        await f.parent.create(recursive: true);
+        await f.writeAsBytes(await entity.readAsBytes());
+      } else if (entity is Directory) {
+        await Directory(outPath).create(recursive: true);
+      }
+    }
+
+    final installed = InstalledPlugin(
+      id: id,
+      version: version,
+      localPath: dest.path,
+      githubUrl: 'local://${src.path}',
+      manifest: Map<String, dynamic>.from(manifest),
+    );
+    await _saveInstalled(installed);
+    invalidateMarketplaceCache();
+    return installed;
+  }
+
+  static Future<InstalledPlugin> installFromGithub(String githubUrl) async {    final cleaned = _cleanGithubUrl(githubUrl);
     final tmpDir = await _tmpDir();
     final stamp = DateTime.now().microsecondsSinceEpoch;
     final zipFile = File('${tmpDir.path}/plugin-$stamp.zip');
