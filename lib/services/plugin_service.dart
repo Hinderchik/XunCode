@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/plugin.dart';
+import 'review_service.dart';
 
 class PluginService {
   static const _apiBase = 'https://vscodemobile-market.vercel.app';
@@ -155,7 +156,23 @@ class PluginService {
     );
 
     await _saveInstalled(installed);
+    unawaited(_reportDownload(id));
     return installed;
+  }
+
+  static Future<void> _reportDownload(String pluginId) async {
+    try {
+      final token = await ReviewService.getUserToken();
+      await http
+          .post(
+            Uri.parse('$_apiBase/api/plugins/download'),
+            headers: {'content-type': 'application/json'},
+            body: jsonEncode({'pluginId': pluginId, 'userToken': token}),
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // Best-effort: a missed counter increment is not worth surfacing.
+    }
   }
 
   static Future<void> uninstall(String id) async {

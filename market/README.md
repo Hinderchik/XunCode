@@ -11,7 +11,9 @@ Vercel-hosted backend for the in-app marketplace.
 | GET    | `/api/plugins/reviews?id=…`| Reviews for a plugin (legacy alias)             |
 | GET    | `/api/plugins/review?id=…` | Reviews for a plugin                            |
 | POST   | `/api/plugins/review`      | Add or update a review                          |
+| POST   | `/api/plugins/download`    | Increment download counter (deduped per token)  |
 | POST   | `/api/admin/submit`        | Submit a GitHub repo for moderation             |
+| GET    | `/api/admin/pending`       | List pending submissions (admin key)            |
 | POST   | `/api/admin/approve`       | Approve a pending submission (admin key)        |
 
 ## Local development
@@ -48,6 +50,8 @@ instead of `fs.writeFileSync`.
 data/
 ├── plugins.json        # Approved plugins (array)
 ├── pending.json        # Submissions awaiting review (array)
+├── downloads/
+│   └── <pluginId>.json # List of userTokens that already counted (dedupe)
 └── reviews/
     └── <pluginId>.json # Reviews for a single plugin
 ```

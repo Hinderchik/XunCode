@@ -46,7 +46,10 @@ class TerminalBridge {
 
   /// Downloads the Alpine minirootfs and extracts it into the app's filesDir.
   /// Calls [onProgress] with bytes-received for download phase, then again
-  /// once during extraction. Idempotent: short-circuits if already installed.
+  /// during extraction. Idempotent: short-circuits if already installed.
+  ///
+  /// Streaming: gunzips into a temp .tar file, then walks tar entries one at
+  /// a time via TarDecoder so the whole archive never sits in memory at once.
   static Future<void> installAlpine({
     void Function(double progress, String stage)? onProgress,
   }) async {
@@ -54,20 +57,23 @@ class TerminalBridge {
 
     final root = await rootfsPath();
     final rootDir = Directory(root);
-    if (!rootDir.existsSync()) rootDir.createSync(recursive: true);
+    if (!await rootDir.exists()) await rootDir.create(recursive: true);
 
     final arch = _alpineArch();
     final url = 'https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/$arch/'
         'alpine-minirootfs-3.20.3-$arch.tar.gz';
 
     final tmpDir = await getTemporaryDirectory();
-    final tarPath = '${tmpDir.path}/alpine-minirootfs.tar.gz';
-    final tarFile = File(tarPath);
+    final gzPath = '${tmpDir.path}/alpine-minirootfs.tar.gz';
+    final tarPath = '${tmpDir.path}/alpine-minirootfs.tar';
+
+    await _silent(() => File(gzPath).delete());
+    await _silent(() => File(tarPath).delete());
 
     final dio = Dio();
     await dio.download(
       url,
-      tarPath,
+      gzPath,
       onReceiveProgress: (received, total) {
         if (total > 0 && onProgress != null) {
           onProgress(received / total, 'Downloading Alpine');
@@ -75,35 +81,52 @@ class TerminalBridge {
       },
     );
 
-    onProgress?.call(0.0, 'Extracting');
-    final bytes = await tarFile.readAsBytes();
-    final gz = GZipDecoder().decodeBytes(bytes);
-    final archive = TarDecoder().decodeBytes(gz);
-    final total = archive.length;
-    var done = 0;
-    for (final entry in archive) {
-      final outPath = '$root/${entry.name}';
-      if (entry.isFile) {
-        final f = File(outPath);
-        f.parent.createSync(recursive: true);
-        await f.writeAsBytes(entry.content as List<int>, flush: false);
-      } else {
-        Directory(outPath).createSync(recursive: true);
-      }
-      done++;
-      if (done % 200 == 0) {
-        onProgress?.call(done / total, 'Extracting');
-      }
+    onProgress?.call(0.0, 'Decompressing');
+    final input = InputFileStream(gzPath);
+    final output = OutputFileStream(tarPath);
+    try {
+      GZipDecoder().decodeStream(input, output);
+    } finally {
+      await input.close();
+      await output.close();
     }
-    onProgress?.call(1.0, 'Extracting');
 
-    // Minimal /etc/resolv.conf so DNS works inside proot
+    onProgress?.call(0.0, 'Extracting');
+    final tarStream = InputFileStream(tarPath);
+    try {
+      final archive = TarDecoder().decodeBuffer(tarStream);
+      final total = archive.length;
+      var done = 0;
+      for (final entry in archive) {
+        final outPath = '$root/${entry.name}';
+        if (entry.isFile) {
+          final f = File(outPath);
+          await f.parent.create(recursive: true);
+          await f.writeAsBytes(entry.content as List<int>, flush: false);
+        } else {
+          await Directory(outPath).create(recursive: true);
+        }
+        done++;
+        if (done % 200 == 0) {
+          onProgress?.call(done / total, 'Extracting');
+        }
+      }
+      onProgress?.call(1.0, 'Extracting');
+    } finally {
+      await tarStream.close();
+    }
+
     final resolv = File('$root/etc/resolv.conf');
-    resolv.parent.createSync(recursive: true);
+    await resolv.parent.create(recursive: true);
     await resolv.writeAsString('nameserver 1.1.1.1\nnameserver 8.8.8.8\n');
 
-    runCatching(() => tarFile.deleteSync());
+    await _silent(() => File(gzPath).delete());
+    await _silent(() => File(tarPath).delete());
     await markAlpineInstalled();
+  }
+
+  static Future<void> _silent(Future<void> Function() block) async {
+    try { await block(); } catch (_) {}
   }
 
   static String _alpineArch() {

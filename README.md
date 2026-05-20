@@ -138,7 +138,9 @@ The marketplace runs on Vercel from the [`market/`](market) directory of this re
 | GET    | `/api/plugins/info?id=…`   | Single plugin detail                            |
 | GET    | `/api/plugins/review?id=…` | Reviews for a plugin                            |
 | POST   | `/api/plugins/review`      | Add or update a review (requires `userToken`)   |
+| POST   | `/api/plugins/download`    | Increment download counter (deduped per token)  |
 | POST   | `/api/admin/submit`        | Submit a GitHub repo for moderation             |
+| GET    | `/api/admin/pending`       | List pending submissions (admin key)            |
 | POST   | `/api/admin/approve`       | Approve a pending submission (admin key)        |
 
 Local dev:
