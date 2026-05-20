@@ -15,6 +15,13 @@ class PluginService {
   static const _apiBase = 'https://vscodemobile-market.vercel.app';
   static const _installedKey = 'installed_plugins_v2';
 
+  // In-memory marketplace cache. The list endpoint is small and rarely changes,
+  // so we hold the result for a short window so navigating in/out of the
+  // marketplace screen doesn't refetch on every entry.
+  static const _marketTtl = Duration(minutes: 2);
+  static List<Plugin>? _marketCache;
+  static DateTime? _marketCacheAt;
+
   static Future<Directory> _pluginsDir() async {
     await FileService.ensureLayout();
     final dir = Directory(FileService.pluginsDir);
@@ -29,30 +36,43 @@ class PluginService {
     return dir;
   }
 
-  static Future<List<Plugin>> fetchMarketplace({String? query}) async {
+  static Future<List<Plugin>> fetchMarketplace({String? query, bool forceRefresh = false}) async {
+    final cached = _marketCache;
+    final cachedAt = _marketCacheAt;
+    if (!forceRefresh && cached != null && cachedAt != null &&
+        DateTime.now().difference(cachedAt) < _marketTtl) {
+      return _filterPlugins(cached, query);
+    }
     try {
       final uri = Uri.parse('$_apiBase/api/plugins/list');
       final res = await http.get(uri).timeout(const Duration(seconds: 15));
-      if (res.statusCode != 200) return [];
+      if (res.statusCode != 200) return cached != null ? _filterPlugins(cached, query) : [];
       final body = jsonDecode(res.body);
       if (body is! List) return [];
-      var list = body
+      final list = body
           .whereType<Map>()
           .map((e) => Plugin.fromJson(Map<String, dynamic>.from(e)))
           .toList();
-      if (query != null && query.trim().isNotEmpty) {
-        final q = query.toLowerCase().trim();
-        list = list
-            .where((p) =>
-                p.name.toLowerCase().contains(q) ||
-                p.description.toLowerCase().contains(q) ||
-                p.tags.any((t) => t.toLowerCase().contains(q)))
-            .toList();
-      }
-      return list;
+      _marketCache = list;
+      _marketCacheAt = DateTime.now();
+      return _filterPlugins(list, query);
     } catch (_) {
-      return [];
+      return cached != null ? _filterPlugins(cached, query) : [];
     }
+  }
+
+  static List<Plugin> _filterPlugins(List<Plugin> source, String? query) {
+    if (query == null || query.trim().isEmpty) return source;
+    final q = query.toLowerCase().trim();
+    return source.where((p) =>
+        p.name.toLowerCase().contains(q) ||
+        p.description.toLowerCase().contains(q) ||
+        p.tags.any((t) => t.toLowerCase().contains(q))).toList();
+  }
+
+  static void invalidateMarketplaceCache() {
+    _marketCache = null;
+    _marketCacheAt = null;
   }
 
   static Future<Plugin?> fetchInfo(String id) async {
@@ -163,6 +183,7 @@ class PluginService {
     );
 
     await _saveInstalled(installed);
+    invalidateMarketplaceCache();
     unawaited(_reportDownload(id));
     return installed;
   }
@@ -189,6 +210,7 @@ class PluginService {
     final pluginsBase = await _pluginsDir();
     final dir = Directory('${pluginsBase.path}/$id');
     if (await dir.exists()) await dir.delete(recursive: true);
+    invalidateMarketplaceCache();
   }
 
   static Future<List<InstalledPlugin>> listInstalled() async {

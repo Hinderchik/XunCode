@@ -46,16 +46,20 @@ class _SidebarState extends State<Sidebar> {
   Future<void> _loadAppProjects() async {
     await FileService.ensureLayout();
     final dir = await FileService.projectsDirectory();
+    final tree = await FileService.buildTree(dir.path);
+    if (!mounted) return;
     setState(() {
       _folderPath = dir.path;
       _folderName = 'PROJECTS';
-      _tree = FileService.buildTree(dir.path);
+      _tree = tree;
     });
   }
 
-  void _refreshTree() {
+  Future<void> _refreshTree() async {
     if (_folderPath.isEmpty) return;
-    setState(() => _tree = FileService.buildTree(_folderPath));
+    final tree = await FileService.buildTree(_folderPath);
+    if (!mounted) return;
+    setState(() => _tree = tree);
   }
 
   Future<void> _newProject() async {
@@ -95,11 +99,13 @@ class _SidebarState extends State<Sidebar> {
     _openProjectRoot(path);
   }
 
-  void _openProjectRoot(String path) {
+  Future<void> _openProjectRoot(String path) async {
+    final tree = await FileService.buildTree(path);
+    if (!mounted) return;
     setState(() {
       _folderPath = path;
       _folderName = path.split('/').last.toUpperCase();
-      _tree = FileService.buildTree(path);
+      _tree = tree;
     });
   }
 

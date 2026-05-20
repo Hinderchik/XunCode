@@ -195,7 +195,41 @@ class FileService {
     }
   }
 
-  static List<FileNode> buildTree(String dirPath) {
+  /// Async tree builder. Walks `dirPath` without blocking the UI thread on
+  /// `listSync`/`statSync` for every file. Use [buildTreeSync] only if you
+  /// need the result inside another sync call.
+  static Future<List<FileNode>> buildTree(String dirPath) async {
+    final dir = Directory(dirPath);
+    if (!await dir.exists()) return [];
+    try {
+      final entries = await dir.list(followLinks: false).toList();
+      entries.sort((a, b) {
+        final aIsDir = a is Directory;
+        final bIsDir = b is Directory;
+        if (aIsDir && !bIsDir) return -1;
+        if (!aIsDir && bIsDir) return 1;
+        return a.path.split('/').last.compareTo(b.path.split('/').last);
+      });
+      final out = <FileNode>[];
+      for (final e in entries) {
+        final name = e.path.split('/').last;
+        if (name.startsWith('.')) continue;
+        if (e is Directory) {
+          out.add(FileNode(
+            name: name, path: e.path, isDir: true,
+            children: await buildTree(e.path),
+          ));
+        } else {
+          out.add(FileNode(name: name, path: e.path, isDir: false));
+        }
+      }
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static List<FileNode> buildTreeSync(String dirPath) {
     final dir = Directory(dirPath);
     if (!dir.existsSync()) return [];
     try {
@@ -211,7 +245,7 @@ class FileService {
         final name = e.path.split('/').last;
         if (name.startsWith('.')) return null;
         if (e is Directory) {
-          return FileNode(name: name, path: e.path, isDir: true, children: buildTree(e.path));
+          return FileNode(name: name, path: e.path, isDir: true, children: buildTreeSync(e.path));
         }
         return FileNode(name: name, path: e.path, isDir: false);
       }).whereType<FileNode>().toList();

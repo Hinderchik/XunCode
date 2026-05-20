@@ -31,10 +31,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() => _loading = true);
     final results = await Future.wait([
-      PluginService.fetchMarketplace(query: _query),
+      PluginService.fetchMarketplace(query: _query, forceRefresh: forceRefresh),
       PluginService.listInstalled(),
     ]);
     if (!mounted) return;
@@ -125,7 +125,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           : _plugins.isEmpty
               ? _buildEmpty()
               : RefreshIndicator(
-                  onRefresh: _load,
+                  onRefresh: () => _load(forceRefresh: true),
                   color: VscodeTheme.accent,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(8),
