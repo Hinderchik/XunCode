@@ -19,8 +19,6 @@ class SettingsService {
   bool get wordWrap => _prefs.getBool('wordWrap') ?? true;
   String get autoSave => _prefs.getString('autoSave') ?? 'off';
   bool get torEnabled => _prefs.getBool('torEnabled') ?? false;
-  String get apiKey => _prefs.getString('apiKey') ?? '';
-  String get aiModel => _prefs.getString('aiModel') ?? 'claude-sonnet-4-6';
   bool get developerMode => _prefs.getBool('developerMode') ?? false;
   String get language => _prefs.getString('language') ?? 'en';
 

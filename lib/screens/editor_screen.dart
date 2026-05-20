@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -7,12 +8,12 @@ import '../models/open_file.dart';
 import '../models/settings_model.dart';
 import '../services/file_service.dart';
 import '../services/tor_service.dart';
-import '../services/plugin_service.dart';
+import '../services/plugin_runtime.dart';
+import '../services/editor_bridge.dart';
 import '../widgets/activity_bar.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/tab_bar.dart';
 import '../widgets/status_bar.dart';
-import '../widgets/clim_panel.dart';
 import '../widgets/terminal_panel.dart';
 import 'settings_screen.dart';
 import 'marketplace_screen.dart';
@@ -25,18 +26,16 @@ class EditorScreen extends StatefulWidget {
 }
 
 class _EditorScreenState extends State<EditorScreen> {
-  // Layout breakpoint between phone (bottom-nav) and tablet (VS Code) layouts.
   static const double _kTabletBreakpoint = 600;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   InAppWebViewController? _webCtrl;
+  EditorBridge? _editorBridge;
   ActivityBarItem _activeBar = ActivityBarItem.explorer;
   bool _sidebarVisible = true;
-  bool _climVisible = false;
   bool _terminalVisible = false;
   String _currentLang = 'plaintext';
   int _line = 1, _col = 1;
-  String _selectedCode = '';
   bool _torEnabled = false;
 
   @override
@@ -47,15 +46,9 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
-  // ── Bar / panel actions ────────────────────────────────────────────────────
-
   void _onActivityBarSelect(ActivityBarItem item) {
     if (item == ActivityBarItem.settings) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-      return;
-    }
-    if (item == ActivityBarItem.clim) {
-      setState(() => _climVisible = !_climVisible);
       return;
     }
     if (item == ActivityBarItem.extensions) {
@@ -76,10 +69,9 @@ class _EditorScreenState extends State<EditorScreen> {
     final filesModel = context.read<OpenFilesModel>();
     filesModel.open(OpenFile(uri: path, name: name, content: content));
     _loadInEditor(content, name);
+    PluginRuntime.instance.fireFileOpen(path);
     final width = MediaQuery.of(context).size.width;
     if (width < _kTabletBreakpoint) {
-      // Phones: close the drawer if it's open and dismiss any modal sheet
-      // we might have been opened from.
       if (Navigator.canPop(context)) Navigator.pop(context);
       _scaffoldKey.currentState?.closeDrawer();
       setState(() => _sidebarVisible = false);
@@ -103,6 +95,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final content = result is String ? result : result.toString();
     await FileService.saveFile(active.uri, content);
     filesModel.markClean(active.uri);
+    PluginRuntime.instance.fireSave(active.uri);
   }
 
   Future<void> _toggleTor() async {
@@ -115,15 +108,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (mounted) setState(() => _torEnabled = status);
   }
 
-  void _insertCode(String code) {
-    _webCtrl?.evaluateJavascript(
-      source: "window.editor.trigger('clim', 'type', { text: ${jsonEncode(code)} });",
-    );
-  }
-
   void _toggleTerminal() => setState(() => _terminalVisible = !_terminalVisible);
-
-  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -169,28 +154,15 @@ class _EditorScreenState extends State<EditorScreen> {
                       children: [
                         EditorTabBar(model: filesModel),
                         Expanded(
-                          child: Row(
+                          child: Column(
                             children: [
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    Expanded(child: _buildEditor(settings)),
-                                    if (_terminalVisible)
-                                      SizedBox(
-                                        height: 280,
-                                        child: TerminalPanel(
-                                          onClose: _toggleTerminal,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              if (_climVisible)
-                                ClimPanel(
-                                  selectedCode: _selectedCode,
-                                  language: _currentLang,
-                                  onClose: () => setState(() => _climVisible = false),
-                                  onInsertCode: _insertCode,
+                              Expanded(child: _buildEditor(settings)),
+                              if (_terminalVisible)
+                                SizedBox(
+                                  height: 280,
+                                  child: TerminalPanel(
+                                    onClose: _toggleTerminal,
+                                  ),
                                 ),
                             ],
                           ),
@@ -255,7 +227,6 @@ class _EditorScreenState extends State<EditorScreen> {
           child: Stack(
             children: [
               _buildEditor(settings),
-              // Bottom-edge gesture: drag up to open the terminal sheet.
               Positioned(
                 left: 0, right: 0, bottom: 0,
                 child: GestureDetector(
@@ -315,7 +286,8 @@ class _EditorScreenState extends State<EditorScreen> {
             _openTerminalSheet();
             break;
           case 3:
-            _openClimSheet();
+            Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const MarketplaceScreen()));
             break;
           case 4:
             Navigator.push(context,
@@ -327,7 +299,7 @@ class _EditorScreenState extends State<EditorScreen> {
         BottomNavigationBarItem(icon: Icon(Icons.folder_outlined, size: 20), label: 'Files'),
         BottomNavigationBarItem(icon: Icon(Icons.search, size: 20), label: 'Search'),
         BottomNavigationBarItem(icon: Icon(Icons.terminal, size: 20), label: 'Terminal'),
-        BottomNavigationBarItem(icon: Icon(Icons.auto_awesome, size: 20), label: 'Clim'),
+        BottomNavigationBarItem(icon: Icon(Icons.extension_outlined, size: 20), label: 'Plugins'),
         BottomNavigationBarItem(icon: Icon(Icons.settings_outlined, size: 20), label: 'Settings'),
       ],
     );
@@ -355,37 +327,6 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  void _openClimSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: VscodeTheme.bgSidebar,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-      ),
-      builder: (sheetCtx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.3,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (_, scroll) => SizedBox(
-            width: double.infinity,
-            child: ClimPanel(
-              selectedCode: _selectedCode,
-              language: _currentLang,
-              onClose: () => Navigator.maybePop(sheetCtx),
-              onInsertCode: _insertCode,
-              fillWidth: true,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ── WebView ────────────────────────────────────────────────────────────────
-
   Widget _buildEditor(SettingsModel settings) {
     return InAppWebView(
       initialFile: 'assets/editor.html',
@@ -395,14 +336,27 @@ class _EditorScreenState extends State<EditorScreen> {
         allowUniversalAccessFromFileURLs: true,
         supportZoom: false,
         transparentBackground: true,
+        cacheEnabled: true,
+        cacheMode: CacheMode.LOAD_DEFAULT,
       ),
       onWebViewCreated: (ctrl) {
         _webCtrl = ctrl;
+        _editorBridge = EditorBridge(ctrl, () => _currentLang);
         _registerHandlers(ctrl, settings);
       },
       onLoadStop: (ctrl, _) async {
         await _applySettings(settings);
-        await _loadInstalledPlugins(ctrl);
+        if (_editorBridge != null) {
+          PluginRuntime.instance.attachEditor(_editorBridge!);
+          PluginRuntime.instance.attachUi((msg, {bool isError = false}) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(msg),
+              backgroundColor: isError ? VscodeTheme.red : VscodeTheme.accent,
+            ));
+          });
+          unawaited(PluginRuntime.instance.activateInstalled());
+        }
       },
     );
   }
@@ -413,19 +367,19 @@ class _EditorScreenState extends State<EditorScreen> {
       callback: (args) {
         if (!mounted) return;
         if (args.length >= 2) {
+          final line = args[0] is int ? args[0] : (args[0] as num).toInt();
+          final col = args[1] is int ? args[1] : (args[1] as num).toInt();
           setState(() {
-            _line = args[0] is int ? args[0] : (args[0] as num).toInt();
-            _col = args[1] is int ? args[1] : (args[1] as num).toInt();
+            _line = line;
+            _col = col;
           });
+          PluginRuntime.instance.fireCursorMove(line, col);
         }
       },
     );
     ctrl.addJavaScriptHandler(
       handlerName: 'onSelectionChange',
-      callback: (args) {
-        if (!mounted) return;
-        if (args.isNotEmpty) setState(() => _selectedCode = args[0]?.toString() ?? '');
-      },
+      callback: (_) {},
     );
     ctrl.addJavaScriptHandler(
       handlerName: 'onContentChange',
@@ -433,37 +387,13 @@ class _EditorScreenState extends State<EditorScreen> {
         final filesModel = context.read<OpenFilesModel>();
         final active = filesModel.active;
         if (active != null) filesModel.markDirty(active.uri);
+        PluginRuntime.instance.fireEditorChange(
+          args.isNotEmpty ? args[0]?.toString() ?? '' : '',
+        );
         if (settings.autoSave == 'afterDelay') {
           Future.delayed(const Duration(seconds: 1), _saveActive);
         }
       },
-    );
-    ctrl.addJavaScriptHandler(
-      handlerName: 'installPlugin',
-      callback: (args) async {
-        if (args.isEmpty) return;
-        final url = args[0] as String;
-        try {
-          final code = await PluginService.fetchPluginCode(url);
-          await PluginService.install(url);
-          await ctrl.evaluateJavascript(source: '(function(){$code})()');
-        } catch (e) {
-          await ctrl.evaluateJavascript(
-            source: 'window.onPluginError && window.onPluginError(${jsonEncode(e.toString())})',
-          );
-        }
-      },
-    );
-    ctrl.addJavaScriptHandler(
-      handlerName: 'removePlugin',
-      callback: (args) async {
-        if (args.isEmpty) return;
-        await PluginService.remove(args[0]);
-      },
-    );
-    ctrl.addJavaScriptHandler(
-      handlerName: 'listPlugins',
-      callback: (_) async => await PluginService.getInstalled(),
     );
     ctrl.addJavaScriptHandler(
       handlerName: 'saveFile',
@@ -471,6 +401,7 @@ class _EditorScreenState extends State<EditorScreen> {
         if (args.length < 2) return;
         await FileService.saveFile(args[0], args[1]);
         if (mounted) context.read<OpenFilesModel>().markClean(args[0]);
+        PluginRuntime.instance.fireSave(args[0]);
       },
     );
   }
@@ -483,16 +414,6 @@ class _EditorScreenState extends State<EditorScreen> {
       'wordWrap': s.wordWrap ? 'on' : 'off',
     });
     await _webCtrl?.evaluateJavascript(source: 'window.applySettings && window.applySettings($payload);');
-  }
-
-  Future<void> _loadInstalledPlugins(InAppWebViewController ctrl) async {
-    final urls = await PluginService.getInstalled();
-    for (final url in urls) {
-      try {
-        final code = await PluginService.fetchPluginCode(url);
-        await ctrl.evaluateJavascript(source: '(function(){$code})()');
-      } catch (_) {}
-    }
   }
 
   String _detectLang(String name) {

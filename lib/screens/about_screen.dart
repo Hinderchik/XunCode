@@ -63,7 +63,6 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _section('CREDITS'),
           _infoTile('Editor', 'Monaco Editor'),
-          _infoTile('AI', 'Anthropic Claude'),
           _infoTile('Framework', 'Flutter'),
           const SizedBox(height: 16),
           _section('LICENSE'),

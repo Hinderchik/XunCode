@@ -1,0 +1,12 @@
+{
+  "name": "vscode-mobile-plugins",
+  "version": "1.0.0",
+  "description": "Marketplace API for VScode Mobile plugins",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}

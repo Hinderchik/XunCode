@@ -1,0 +1,8 @@
+{
+  "id": "com.example.hello",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "author": "example",
+  "description": "Says hello when activated",
+  "main": "main.js"
+}

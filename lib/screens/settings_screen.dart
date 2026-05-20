@@ -7,6 +7,7 @@ import '../models/settings_model.dart';
 import '../services/github_oauth_service.dart';
 import 'about_screen.dart';
 import 'github_signin_screen.dart';
+import 'plugin_docs_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -81,14 +82,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _dropdown(context, 'Auto Save', s.autoSave,
             ['off', 'afterDelay', 'onFocusChange'],
             (v) => s.set('autoSave', v!)),
-          _section('AI / Clim'),
-          _textField(context, 'Anthropic API Key', s.apiKey, obscure: true,
-            onSave: (v) => s.set('apiKey', v)),
-          _dropdown(context, 'AI Model', s.aiModel,
-            ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5'],
-            (v) => s.set('aiModel', v!)),
           _section('Sync'),
           _buildGithubSync(),
+          _section('Plugins'),
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.menu_book_outlined, size: 18, color: VscodeTheme.accent),
+            title: const Text('Документация по плагинам',
+              style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: const Text('Plugin API reference (RU / EN)',
+              style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            trailing: const Icon(Icons.chevron_right, size: 16, color: VscodeTheme.fgMuted),
+            onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const PluginDocsScreen())),
+          ),
           _section('Network'),
           _toggle(context, 'Tor Proxy (via Orbot)', s.torEnabled,
             (v) => s.set('torEnabled', v)),
@@ -219,32 +227,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onChangeEnd: onChanged,
       ),
     );
-
-  Widget _textField(BuildContext ctx, String label, String value,
-      {bool obscure = false, required ValueChanged<String> onSave}) {
-    final ctrl = TextEditingController(text: value);
-    return ListTile(
-      tileColor: VscodeTheme.bgSidebar,
-      dense: true,
-      title: Text(label, style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 6, bottom: 4),
-        child: TextField(
-          controller: ctrl,
-          obscureText: obscure,
-          style: const TextStyle(color: VscodeTheme.fg, fontSize: 13),
-          onSubmitted: onSave,
-          decoration: InputDecoration(
-            hintText: obscure ? 'sk-ant-...' : label,
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.check, size: 16, color: VscodeTheme.accent),
-              onPressed: () => onSave(ctrl.text),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _info(String label, String value) => ListTile(
     tileColor: VscodeTheme.bgSidebar,

@@ -36,9 +36,19 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   Future<void> _bootstrap() async {
     final hasProot = await TerminalBridge.prootExists();
     if (!hasProot) {
-      setState(() => _installError =
-          'proot binary missing. Run scripts/fetch-proot.sh and rebuild.');
-      return;
+      // Try to download it on the fly. Falls back to /system/bin/sh below.
+      setState(() {
+        _installing = true;
+        _installStage = 'Downloading proot';
+        _installProgress = 0;
+      });
+      final r = await TerminalBridge.downloadProot();
+      if (mounted) setState(() => _installing = false);
+      if (r != 'ok') {
+        // Final fallback — unsandboxed shell with a banner.
+        await _newUnsandboxedTab();
+        return;
+      }
     }
     final installed = await TerminalBridge.isAlpineInstalled();
     if (!installed) {
@@ -73,6 +83,17 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   Future<void> _newTab() async {
     final id = 'term-${DateTime.now().microsecondsSinceEpoch}';
     final session = await TerminalBridge.create(id: id);
+    final tab = _Tab(session: session);
+    setState(() {
+      _tabs.add(tab);
+      _ctrl.dispose();
+      _ctrl = TabController(length: _tabs.length, vsync: this, initialIndex: _tabs.length - 1);
+    });
+  }
+
+  Future<void> _newUnsandboxedTab() async {
+    final id = 'term-${DateTime.now().microsecondsSinceEpoch}';
+    final session = await TerminalBridge.createUnsandboxed(id: id);
     final tab = _Tab(session: session);
     setState(() {
       _tabs.add(tab);

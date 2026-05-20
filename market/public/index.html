@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VScode Mobile · Plugin Marketplace</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: -apple-system, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 0;
+  }
+  header {
+    background: #252526;
+    border-bottom: 1px solid #3c3c3c;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+  }
+  header h1 { color: #569cd6; font-size: 20px; font-weight: 600; }
+  header .nav { margin-left: auto; }
+  header .nav button {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #3c3c3c;
+    padding: 6px 14px;
+    border-radius: 4px;
+    margin-left: 6px;
+    cursor: pointer;
+    font: inherit;
+  }
+  header .nav button.active { background: #007acc; color: #fff; border-color: #007acc; }
+  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+  section { display: none; }
+  section.active { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .card {
+    background: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 6px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  .card h3 { color: #fff; font-size: 15px; }
+  .card .author { color: #888; font-size: 11px; margin-bottom: 6px; }
+  .card .desc { color: #ccc; font-size: 12px; flex: 1; margin-bottom: 8px; }
+  .card .meta { display: flex; gap: 12px; font-size: 11px; color: #888; align-items: center; }
+  .stars { color: #007acc; }
+  button.primary {
+    background: #007acc;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+  }
+  button.primary:hover { background: #006bb3; }
+  input, textarea {
+    background: #2d2d2d;
+    color: #d4d4d4;
+    border: 1px solid #3c3c3c;
+    padding: 8px 10px;
+    border-radius: 4px;
+    font: inherit;
+    width: 100%;
+  }
+  label { display: block; color: #888; font-size: 11px; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form { max-width: 520px; }
+  .form button { margin-top: 14px; }
+  .pending-row {
+    display: flex; align-items: center; gap: 12px;
+    background: #252526; border: 1px solid #3c3c3c; border-radius: 6px;
+    padding: 12px; margin-bottom: 8px;
+  }
+  .pending-row .info { flex: 1; }
+  .pending-row a { color: #4fc1ff; }
+  footer {
+    border-top: 1px solid #3c3c3c;
+    padding: 24px;
+    margin-top: 40px;
+    color: #888;
+    font-size: 12px;
+    text-align: center;
+  }
+  footer a { color: #4fc1ff; text-decoration: none; margin: 0 8px; }
+  .muted { color: #888; font-size: 12px; }
+  .empty { padding: 40px; text-align: center; color: #888; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #007acc; color: #fff; padding: 10px 16px; border-radius: 4px;
+    font-size: 13px; opacity: 0; transition: opacity .2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>VScode Mobile Plugins</h1>
+  <div class="nav">
+    <button class="active" data-tab="browse">Browse</button>
+    <button data-tab="submit">Submit</button>
+    <button data-tab="admin">Admin</button>
+  </div>
+</header>
+
+<main>
+
+<section class="active" data-tab="browse">
+  <div id="plugin-list" class="grid">
+    <div class="empty">Loading…</div>
+  </div>
+</section>
+
+<section data-tab="submit">
+  <h2 style="color:#4ec9b0; margin-bottom:8px;">Submit a Plugin</h2>
+  <p class="muted">Paste a public GitHub repository URL. The repo must contain <code>plugin.json</code> and <code>main.js</code> in its root.</p>
+  <div class="form">
+    <label>Plugin ID</label>
+    <input id="s-id" placeholder="com.author.plugin" />
+    <label>Name</label>
+    <input id="s-name" placeholder="My Plugin" />
+    <label>Author</label>
+    <input id="s-author" placeholder="@yourhandle" />
+    <label>Description</label>
+    <textarea id="s-desc" rows="3"></textarea>
+    <label>GitHub URL</label>
+    <input id="s-url" placeholder="https://github.com/owner/repo" />
+    <button class="primary" id="s-submit">Submit for review</button>
+  </div>
+</section>
+
+<section data-tab="admin">
+  <h2 style="color:#4ec9b0; margin-bottom:8px;">Admin</h2>
+  <p class="muted">Enter your API key to load pending submissions.</p>
+  <div class="form">
+    <label>Admin API Key</label>
+    <input id="a-key" type="password" placeholder="ADMIN_API_KEY" />
+    <button class="primary" id="a-load">Load pending</button>
+  </div>
+  <div id="pending-list" style="margin-top:20px;"></div>
+</section>
+
+</main>
+
+<footer>
+  <div>VScode Mobile · plugin marketplace</div>
+  <div style="margin-top:6px;">
+    <a href="https://github.com/Hinderchik" target="_blank">GitHub: @Hinderchik</a>
+    <a href="https://t.me/XunKal1Dev" target="_blank">Telegram Dev: @XunKal1Dev</a>
+    <a href="https://t.me/GodPassTGK" target="_blank">Telegram: @GodPassTGK</a>
+  </div>
+</footer>
+
+<div id="toast" class="toast"></div>
+
+<script>
+  const tabs = document.querySelectorAll('header .nav button');
+  const sections = document.querySelectorAll('section[data-tab]');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(b => b.classList.toggle('active', b === t));
+    sections.forEach(s => s.classList.toggle('active', s.dataset.tab === t.dataset.tab));
+    if (t.dataset.tab === 'browse') loadPlugins();
+  }));
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function stars(rating) {
+    const r = Math.round(rating || 0);
+    return '★'.repeat(r) + '☆'.repeat(5 - r);
+  }
+
+  async function loadPlugins() {
+    const list = document.getElementById('plugin-list');
+    list.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const r = await fetch('/api/plugins/list');
+      const data = await r.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        list.innerHTML = '<div class="empty">No plugins yet. Be the first to <a href="#" onclick="document.querySelector(\'[data-tab=submit]\').click(); return false;" style="color:#4fc1ff">submit one</a>.</div>';
+        return;
+      }
+      list.innerHTML = data.map(p => `
+        <div class="card">
+          <h3>${escapeHtml(p.name || p.id)}</h3>
+          <div class="author">${escapeHtml(p.author || '')} · v${escapeHtml(p.version || '1.0.0')}</div>
+          <div class="desc">${escapeHtml(p.description || '')}</div>
+          <div class="meta">
+            <span class="stars">${stars(p.rating)}</span>
+            <span>${(p.rating || 0).toFixed(1)} (${p.reviewsCount || 0})</span>
+            <span>↓ ${p.downloads || 0}</span>
+            <span style="margin-left:auto"><a href="${escapeAttr(p.githubUrl)}" target="_blank" style="color:#4fc1ff;font-size:11px;">GitHub</a></span>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      list.innerHTML = '<div class="empty">Failed to load plugins.</div>';
+    }
+  }
+
+  document.getElementById('s-submit').addEventListener('click', async () => {
+    const body = {
+      pluginId: document.getElementById('s-id').value.trim(),
+      name: document.getElementById('s-name').value.trim(),
+      author: document.getElementById('s-author').value.trim(),
+      description: document.getElementById('s-desc').value.trim(),
+      githubUrl: document.getElementById('s-url').value.trim(),
+    };
+    if (!body.pluginId || !body.githubUrl) {
+      toast('Plugin ID and GitHub URL required');
+      return;
+    }
+    try {
+      const r = await fetch('/api/admin/submit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (r.ok && data.success) {
+        toast('Submitted for review!');
+        ['s-id','s-name','s-author','s-desc','s-url'].forEach(id => document.getElementById(id).value = '');
+      } else {
+        toast(data.error || 'Submit failed');
+      }
+    } catch (e) {
+      toast('Network error');
+    }
+  });
+
+  document.getElementById('a-load').addEventListener('click', async () => {
+    const key = document.getElementById('a-key').value.trim();
+    if (!key) return toast('Enter API key');
+    const list = document.getElementById('pending-list');
+    list.innerHTML = '<div class="empty">Loading…</div>';
+    // No "list pending" endpoint — admin pulls the static file directly.
+    try {
+      const r = await fetch('/data/pending.json');
+      if (!r.ok) throw new Error('cannot read pending.json');
+      const items = await r.json();
+      if (!items.length) {
+        list.innerHTML = '<div class="empty">No pending submissions.</div>';
+        return;
+      }
+      list.innerHTML = items.map(it => `
+        <div class="pending-row">
+          <div class="info">
+            <strong>${escapeHtml(it.name || it.id)}</strong>
+            <div class="muted">${escapeHtml(it.id)} · ${escapeHtml(it.author || '')}</div>
+            <div class="muted">${escapeHtml(it.description || '')}</div>
+            <a href="${escapeAttr(it.githubUrl)}" target="_blank">${escapeHtml(it.githubUrl)}</a>
+          </div>
+          <button class="primary" data-id="${escapeAttr(it.id)}">Approve</button>
+        </div>
+      `).join('');
+      list.querySelectorAll('button.primary').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.id;
+          const r = await fetch('/api/admin/approve', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id, adminKey: key }),
+          });
+          const data = await r.json();
+          if (r.ok && data.ok) {
+            toast('Approved');
+            document.getElementById('a-load').click();
+          } else {
+            toast(data.error || 'Approve failed');
+          }
+        });
+      });
+    } catch (e) {
+      list.innerHTML = '<div class="empty">Failed to load pending.</div>';
+    }
+  });
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  loadPlugins();
+</script>
+
+</body>
+</html>

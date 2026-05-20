@@ -33,9 +33,11 @@ class _PluginDocsScreenState extends State<PluginDocsScreen> {
           InAppWebView(
             initialFile: 'assets/plugin-docs.html',
             initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: false,
+              javaScriptEnabled: true,
               transparentBackground: true,
               disableHorizontalScroll: false,
+              cacheEnabled: true,
+              cacheMode: CacheMode.LOAD_DEFAULT,
             ),
             onWebViewCreated: (c) => _controller = c,
             onLoadStop: (c, url) => setState(() => _loading = false),

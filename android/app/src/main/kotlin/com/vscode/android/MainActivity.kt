@@ -52,6 +52,21 @@ class MainActivity : FlutterActivity() {
                     val f = terminalService.prootBinary()
                     result.success(f.exists() && f.length() > 0)
                 }
+                "downloadProot" -> {
+                    Thread {
+                        val r = terminalService.downloadProot()
+                        runOnUiThread { result.success(r) }
+                    }.start()
+                }
+                "createUnsandboxed" -> {
+                    val id = call.argument<String>("id") ?: return@setMethodCallHandler result.error("ARG", "missing id", null)
+                    val sink = sinks[id]
+                    if (sink == null) {
+                        result.error("NO_SINK", "subscribe to events for id=$id first", null)
+                    } else {
+                        result.success(terminalService.startUnsandboxed(id, sink))
+                    }
+                }
                 "create" -> {
                     val id = call.argument<String>("id") ?: return@setMethodCallHandler result.error("ARG", "missing id", null)
                     val cols = call.argument<Int>("cols") ?: 80

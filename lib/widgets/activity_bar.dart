@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app/theme.dart';
 
-enum ActivityBarItem { explorer, search, extensions, settings, clim }
+enum ActivityBarItem { explorer, search, extensions, settings }
 
 class ActivityBar extends StatelessWidget {
   final ActivityBarItem selected;
@@ -20,7 +20,6 @@ class ActivityBar extends StatelessWidget {
           _item(ActivityBarItem.explorer, Icons.folder_outlined, 'Explorer'),
           _item(ActivityBarItem.search, Icons.search, 'Search'),
           _item(ActivityBarItem.extensions, Icons.extension_outlined, 'Extensions'),
-          _item(ActivityBarItem.clim, Icons.auto_awesome_outlined, 'Clim AI'),
           const Spacer(),
           _item(ActivityBarItem.settings, Icons.settings_outlined, 'Settings'),
           const SizedBox(height: 8),

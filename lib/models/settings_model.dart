@@ -13,8 +13,6 @@ class SettingsModel extends ChangeNotifier {
   bool get wordWrap => _svc.wordWrap;
   String get autoSave => _svc.autoSave;
   bool get torEnabled => _svc.torEnabled;
-  String get apiKey => _svc.apiKey;
-  String get aiModel => _svc.aiModel;
   bool get developerMode => _svc.developerMode;
   String get language => _svc.language;
 

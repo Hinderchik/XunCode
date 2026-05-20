@@ -24,7 +24,49 @@ class TerminalService(private val appContext: Context) {
 
     fun rootfsDir(): File = File(appContext.filesDir, "alpine")
 
-    fun prootBinary(): File = File(appContext.applicationInfo.nativeLibraryDir, "libproot.so")
+    private fun fallbackProotBinary(): File = File(appContext.filesDir, "bin/proot")
+
+    fun prootBinary(): File {
+        val native = File(appContext.applicationInfo.nativeLibraryDir, "libproot.so")
+        if (native.exists() && native.length() > 0) return native
+        return fallbackProotBinary()
+    }
+
+    fun downloadProot(): String {
+        val arch = when (android.os.Build.SUPPORTED_ABIS.firstOrNull()) {
+            "arm64-v8a" -> "proot-aarch64"
+            "armeabi-v7a" -> "proot-armv7a"
+            "x86_64" -> "proot-x86_64"
+            else -> "proot-aarch64"
+        }
+        val mirrors = listOf(
+            "https://github.com/proot-me/proot-static-build/releases/download/v5.4.0/$arch",
+            "https://github.com/termux/proot/releases/download/v5.4.0/$arch",
+        )
+        val out = fallbackProotBinary()
+        out.parentFile?.mkdirs()
+        var lastError: String? = null
+        for (url in mirrors) {
+            try {
+                val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection)
+                conn.connectTimeout = 15000
+                conn.readTimeout = 60000
+                conn.instanceFollowRedirects = true
+                conn.requestMethod = "GET"
+                if (conn.responseCode in 200..299) {
+                    conn.inputStream.use { input ->
+                        out.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    out.setExecutable(true, false)
+                    return "ok"
+                }
+                lastError = "HTTP ${conn.responseCode}"
+            } catch (t: Throwable) {
+                lastError = t.message
+            }
+        }
+        return "error: ${lastError ?: "unknown"}"
+    }
 
     fun create(id: String, cols: Int, rows: Int, sink: EventChannel.EventSink): String {
         kill(id)
@@ -61,6 +103,13 @@ class TerminalService(private val appContext: Context) {
         rootfsDir().mkdirs()
         File(rootfsDir(), ".installed").writeText("ok")
     }
+
+    fun startUnsandboxed(id: String, sink: EventChannel.EventSink): String {
+        kill(id)
+        val session = TerminalSession(this, id, 80, 24, sink, useSystemSh = true)
+        sessions[id] = session
+        return session.start()
+    }
 }
 
 class TerminalSession(
@@ -69,21 +118,20 @@ class TerminalSession(
     @Volatile var cols: Int,
     @Volatile var rows: Int,
     private val sink: EventChannel.EventSink,
+    private val useSystemSh: Boolean = false,
 ) {
     private var process: Process? = null
     private var writer: OutputStream? = null
     private var readerThread: Thread? = null
 
-    /**
-     * Returns "ok" or an error string. Errors are also forwarded over the
-     * event sink so the UI can render them inline.
-     */
     fun start(): String {
+        if (useSystemSh) return startSystemSh()
+
         val proot = service.prootBinary()
         val rootfs = service.rootfsDir()
 
         if (!proot.exists() || proot.length() == 0L) {
-            return emit("[terminal] proot binary missing — fetch-proot.sh did not populate jniLibs")
+            return emit("[terminal] proot binary missing")
         }
         if (!service.isInstalled()) {
             return emit("[terminal] Alpine rootfs not installed yet — run installAlpine first")
@@ -126,6 +174,30 @@ class TerminalSession(
             "ok"
         } catch (t: Throwable) {
             emit("[terminal] failed to start: ${t.message}\n")
+        }
+    }
+
+    private fun startSystemSh(): String {
+        return try {
+            val pb = ProcessBuilder("/system/bin/sh")
+            pb.environment().apply {
+                put("HOME", service.rootfsDir().absolutePath)
+                put("TERM", "xterm-256color")
+                put("PS1", "$ ")
+                put("COLUMNS", cols.toString())
+                put("LINES", rows.toString())
+            }
+            pb.redirectErrorStream(true)
+            val p = pb.start()
+            process = p
+            writer = p.outputStream
+            readerThread = Thread({ pumpOutput(p) }, "term-$id-reader").apply {
+                isDaemon = true; start()
+            }
+            emit("[terminal] running in unsandboxed mode (/system/bin/sh)\n")
+            "ok"
+        } catch (t: Throwable) {
+            emit("[terminal] system sh failed: ${t.message}\n")
         }
     }
 

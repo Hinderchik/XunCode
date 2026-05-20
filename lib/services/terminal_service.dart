@@ -27,6 +27,20 @@ class TerminalBridge {
     return v ?? false;
   }
 
+  /// Asks native side to download a proot static binary into filesDir/bin/proot.
+  /// Returns 'ok' on success or an error string.
+  static Future<String> downloadProot() async {
+    final r = await _method.invokeMethod<String>('downloadProot');
+    return r ?? 'error: no response';
+  }
+
+  /// Boots a /system/bin/sh session — used when proot can't be obtained.
+  static Future<TerminalSession> createUnsandboxed({required String id}) async {
+    final session = TerminalSession._(id, 80, 24);
+    await session._openUnsandboxed();
+    return session;
+  }
+
   static Future<void> markAlpineInstalled() =>
       _method.invokeMethod('markAlpineInstalled');
 
@@ -159,6 +173,27 @@ class TerminalSession {
       'id': id,
       'cols': cols,
       'rows': rows,
+    });
+    if (result != null && result != 'ok' && !result.startsWith('[terminal]')) {
+      _output.add(result);
+    }
+  }
+
+  Future<void> _openUnsandboxed() async {
+    _sub = TerminalBridge._events
+        .receiveBroadcastStream({'id': id})
+        .listen(
+          (event) {
+            if (event is String) _output.add(event);
+          },
+          onError: (e) => _output.add('\n[stream error] $e\n'),
+          onDone: () {
+            if (!_output.isClosed) _output.add('\n[session ended]\n');
+          },
+        );
+
+    final result = await TerminalBridge._method.invokeMethod<String>('createUnsandboxed', {
+      'id': id,
     });
     if (result != null && result != 'ok' && !result.startsWith('[terminal]')) {
       _output.add(result);

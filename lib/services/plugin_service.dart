@@ -1,56 +1,229 @@
+import 'dart:async';
 import 'dart:convert';
-import 'package:dio/dio.dart';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:archive/archive_io.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/plugin_model.dart';
-import 'tor_service.dart';
+
+import '../models/plugin.dart';
 
 class PluginService {
-  static const _installedKey = 'installed_plugins';
-  static const _marketplaceUrl =
-      'https://vscode-mobile-plugins.vercel.app/api/plugins';
+  static const _apiBase = 'https://vscode-mobile-plugins.vercel.app';
+  static const _installedKey = 'installed_plugins_v2';
 
-  static Future<List<String>> getInstalled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_installedKey) ?? [];
+  static Future<Directory> _pluginsDir() async {
+    final base = await getApplicationDocumentsDirectory();
+    final dir = Directory('${base.path}/plugins');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
   }
 
-  static Future<void> saveInstalled(List<String> urls) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(_installedKey, urls);
-  }
-
-  static Future<void> install(String url) async {
-    final urls = await getInstalled();
-    if (!urls.contains(url)) {
-      urls.add(url);
-      await saveInstalled(urls);
-    }
-  }
-
-  static Future<void> remove(String url) async {
-    final urls = await getInstalled();
-    urls.remove(url);
-    await saveInstalled(urls);
-  }
-
-  static Future<String> fetchPluginCode(String url) async {
-    final dio = Dio();
-    final response = await dio.get<String>(url,
-        options: Options(responseType: ResponseType.plain));
-    return response.data ?? '';
-  }
-
-  static Future<List<PluginModel>> fetchMarketplace({String? query, String? category}) async {
+  static Future<List<Plugin>> fetchMarketplace({String? query}) async {
     try {
-      final dio = Dio();
-      final params = <String, String>{};
-      if (query != null && query.isNotEmpty) params['q'] = query;
-      if (category != null && category.isNotEmpty) params['category'] = category;
-      final response = await dio.get(_marketplaceUrl, queryParameters: params);
-      final list = response.data as List;
-      return list.map((e) => PluginModel.fromJson(e as Map<String, dynamic>)).toList();
+      final uri = Uri.parse('$_apiBase/api/plugins/list');
+      final res = await http.get(uri).timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return [];
+      final body = jsonDecode(res.body);
+      if (body is! List) return [];
+      var list = body
+          .whereType<Map>()
+          .map((e) => Plugin.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+      if (query != null && query.trim().isNotEmpty) {
+        final q = query.toLowerCase().trim();
+        list = list
+            .where((p) =>
+                p.name.toLowerCase().contains(q) ||
+                p.description.toLowerCase().contains(q) ||
+                p.tags.any((t) => t.toLowerCase().contains(q)))
+            .toList();
+      }
+      return list;
     } catch (_) {
       return [];
     }
+  }
+
+  static Future<Plugin?> fetchInfo(String id) async {
+    try {
+      final uri = Uri.parse('$_apiBase/api/plugins/info?id=$id');
+      final res = await http.get(uri).timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return null;
+      final body = jsonDecode(res.body);
+      if (body is! Map) return null;
+      return Plugin.fromJson(Map<String, dynamic>.from(body));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<InstalledPlugin> installFromGithub(String githubUrl) async {
+    final cleaned = _cleanGithubUrl(githubUrl);
+    final tmpDir = await getTemporaryDirectory();
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final zipFile = File('${tmpDir.path}/plugin-$stamp.zip');
+
+    Uint8List? bytes;
+    Object? lastError;
+    for (final branch in const ['main', 'master']) {
+      final url = '$cleaned/archive/refs/heads/$branch.zip';
+      try {
+        final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 60));
+        if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+          bytes = res.bodyBytes;
+          break;
+        }
+        lastError = 'HTTP ${res.statusCode} on $branch branch';
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (bytes == null) {
+      throw Exception('Failed to download plugin: $lastError');
+    }
+
+    await zipFile.writeAsBytes(bytes, flush: true);
+    final extractDir = Directory('${tmpDir.path}/plugin-extract-$stamp');
+    if (await extractDir.exists()) await extractDir.delete(recursive: true);
+    await extractDir.create(recursive: true);
+
+    final archive = ZipDecoder().decodeBytes(bytes);
+    for (final entry in archive) {
+      final outPath = '${extractDir.path}/${entry.name}';
+      if (entry.isFile) {
+        final f = File(outPath);
+        await f.parent.create(recursive: true);
+        await f.writeAsBytes(entry.content as List<int>, flush: false);
+      } else {
+        await Directory(outPath).create(recursive: true);
+      }
+    }
+
+    final inner = await _findPluginRoot(extractDir);
+    if (inner == null) {
+      await zipFile.delete().catchError((_) => zipFile);
+      await extractDir.delete(recursive: true).catchError((_) => extractDir);
+      throw Exception('plugin.json not found in repository');
+    }
+
+    final manifestFile = File('${inner.path}/plugin.json');
+    final manifest = jsonDecode(await manifestFile.readAsString());
+    if (manifest is! Map) {
+      throw Exception('plugin.json must be an object');
+    }
+    final id = manifest['id']?.toString();
+    final version = manifest['version']?.toString() ?? '1.0.0';
+    final mainName = manifest['main']?.toString() ?? 'main.js';
+    if (id == null || id.isEmpty) {
+      throw Exception('plugin.json missing required "id"');
+    }
+    final mainFile = File('${inner.path}/$mainName');
+    if (!await mainFile.exists()) {
+      throw Exception('main file "$mainName" not found');
+    }
+
+    final pluginsBase = await _pluginsDir();
+    final dest = Directory('${pluginsBase.path}/$id');
+    if (await dest.exists()) await dest.delete(recursive: true);
+    await dest.create(recursive: true);
+
+    await for (final entity in inner.list(recursive: true, followLinks: false)) {
+      final rel = entity.path.substring(inner.path.length);
+      if (rel.isEmpty) continue;
+      final outPath = '${dest.path}$rel';
+      if (entity is File) {
+        final f = File(outPath);
+        await f.parent.create(recursive: true);
+        await f.writeAsBytes(await entity.readAsBytes());
+      } else if (entity is Directory) {
+        await Directory(outPath).create(recursive: true);
+      }
+    }
+
+    await zipFile.delete().catchError((_) => zipFile);
+    await extractDir.delete(recursive: true).catchError((_) => extractDir);
+
+    final installed = InstalledPlugin(
+      id: id,
+      version: version,
+      localPath: dest.path,
+      githubUrl: cleaned,
+      manifest: Map<String, dynamic>.from(manifest),
+    );
+
+    await _saveInstalled(installed);
+    return installed;
+  }
+
+  static Future<void> uninstall(String id) async {
+    final list = await listInstalled();
+    final filtered = list.where((p) => p.id != id).toList();
+    await _writeAll(filtered);
+    final pluginsBase = await _pluginsDir();
+    final dir = Directory('${pluginsBase.path}/$id');
+    if (await dir.exists()) await dir.delete(recursive: true);
+  }
+
+  static Future<List<InstalledPlugin>> listInstalled() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_installedKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final parsed = jsonDecode(raw);
+      if (parsed is! List) return [];
+      return parsed
+          .whereType<Map>()
+          .map((e) => InstalledPlugin.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<bool> isInstalled(String id) async {
+    final list = await listInstalled();
+    return list.any((p) => p.id == id);
+  }
+
+  static Future<String> readPluginCode(InstalledPlugin p) async {
+    final f = File('${p.localPath}/${p.mainFile}');
+    return f.readAsString();
+  }
+
+  static Future<void> _saveInstalled(InstalledPlugin p) async {
+    final list = await listInstalled();
+    list.removeWhere((e) => e.id == p.id);
+    list.add(p);
+    await _writeAll(list);
+  }
+
+  static Future<void> _writeAll(List<InstalledPlugin> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _installedKey,
+      jsonEncode(list.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  static String _cleanGithubUrl(String url) {
+    var u = url.trim();
+    if (u.endsWith('.git')) u = u.substring(0, u.length - 4);
+    if (u.endsWith('/')) u = u.substring(0, u.length - 1);
+    return u;
+  }
+
+  static Future<Directory?> _findPluginRoot(Directory extractDir) async {
+    final direct = File('${extractDir.path}/plugin.json');
+    if (await direct.exists()) return extractDir;
+    await for (final entity in extractDir.list()) {
+      if (entity is Directory) {
+        final f = File('${entity.path}/plugin.json');
+        if (await f.exists()) return entity;
+      }
+    }
+    return null;
   }
 }

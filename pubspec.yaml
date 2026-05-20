@@ -1,5 +1,5 @@
 name: vscode_android
-description: Mobile VSCode for Android — Monaco Editor, Clim AI, Plugin Marketplace, Tor proxy
+description: Mobile VSCode for Android — Monaco Editor, GitHub-based plugins, Tor proxy
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -13,6 +13,7 @@ dependencies:
   shared_preferences: ^2.3.2
   provider: ^6.1.2
   dio: ^5.7.0
+  http: ^1.2.2
   file_picker: ^8.1.2
   path_provider: ^2.1.4
   url_launcher: ^6.3.1
@@ -32,6 +33,7 @@ flutter:
   assets:
     - assets/editor.html
     - assets/plugin-docs.html
+    - assets/plugin-examples/hello-world/
     - assets/monaco/vs/
     - assets/monaco/vs/base/worker/
     - assets/monaco/vs/basic-languages/
