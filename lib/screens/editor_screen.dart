@@ -11,6 +11,7 @@ import '../services/tor_service.dart';
 import '../services/plugin_runtime.dart';
 import '../services/editor_bridge.dart';
 import '../widgets/activity_bar.dart';
+import '../widgets/command_palette.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/tab_bar.dart';
 import '../widgets/status_bar.dart';
@@ -191,13 +192,27 @@ class _EditorScreenState extends State<EditorScreen> {
                       ),
                     Positioned(
                       right: 12, bottom: 12,
-                      child: FloatingActionButton.small(
-                        heroTag: 'tablet-term',
-                        backgroundColor: VscodeTheme.bgInput,
-                        foregroundColor: VscodeTheme.accent,
-                        tooltip: 'Toggle terminal',
-                        onPressed: _toggleTerminal,
-                        child: const Icon(Icons.terminal, size: 18),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FloatingActionButton.small(
+                            heroTag: 'tablet-cmd',
+                            backgroundColor: VscodeTheme.bgInput,
+                            foregroundColor: VscodeTheme.accent,
+                            tooltip: 'Plugin commands',
+                            onPressed: () => showPluginCommandPalette(context),
+                            child: const Icon(Icons.bolt_outlined, size: 18),
+                          ),
+                          const SizedBox(height: 8),
+                          FloatingActionButton.small(
+                            heroTag: 'tablet-term',
+                            backgroundColor: VscodeTheme.bgInput,
+                            foregroundColor: VscodeTheme.accent,
+                            tooltip: 'Toggle terminal',
+                            onPressed: _toggleTerminal,
+                            child: const Icon(Icons.terminal, size: 18),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -227,6 +242,17 @@ class _EditorScreenState extends State<EditorScreen> {
           child: Stack(
             children: [
               _buildEditor(settings),
+              Positioned(
+                right: 12, bottom: 24,
+                child: FloatingActionButton.small(
+                  heroTag: 'phone-cmd',
+                  backgroundColor: VscodeTheme.bgInput,
+                  foregroundColor: VscodeTheme.accent,
+                  tooltip: 'Plugin commands',
+                  onPressed: () => showPluginCommandPalette(context),
+                  child: const Icon(Icons.bolt_outlined, size: 16),
+                ),
+              ),
               Positioned(
                 left: 0, right: 0, bottom: 0,
                 child: GestureDetector(

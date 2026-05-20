@@ -112,4 +112,56 @@ class PluginRuntime {
       await s.fireHook('onCursorMove', {'line': line, 'column': column});
     }
   }
+
+  Future<void> fireSettingsChange(Map<String, dynamic> settings) async {
+    for (final s in _active.values) {
+      await s.fireHook('onSettingsChange', settings);
+    }
+  }
+
+  /// Map of pluginId → command IDs registered by that plugin.
+  Map<String, Set<String>> commandsByPlugin() {
+    final out = <String, Set<String>>{};
+    _active.forEach((id, sandbox) {
+      out[id] = sandbox.commands;
+    });
+    return out;
+  }
+
+  /// Flat list of "<pluginId>:<commandId>" entries for a quick-pick.
+  List<String> allCommandIds() {
+    final out = <String>[];
+    _active.forEach((id, sandbox) {
+      for (final c in sandbox.commands) {
+        out.add('$id:$c');
+      }
+    });
+    return out;
+  }
+
+  /// Executes a command; accepts both "pluginId:commandId" and bare commandId
+  /// (in which case the first matching plugin wins).
+  Future<bool> executeCommand(String entry) async {
+    String? pluginId;
+    String commandId = entry;
+    final colon = entry.indexOf(':');
+    if (colon > 0) {
+      pluginId = entry.substring(0, colon);
+      commandId = entry.substring(colon + 1);
+    }
+    if (pluginId != null) {
+      final sandbox = _active[pluginId];
+      if (sandbox == null) return false;
+      if (!sandbox.commands.contains(commandId)) return false;
+      await sandbox.executeCommand(commandId);
+      return true;
+    }
+    for (final s in _active.values) {
+      if (s.commands.contains(commandId)) {
+        await s.executeCommand(commandId);
+        return true;
+      }
+    }
+    return false;
+  }
 }

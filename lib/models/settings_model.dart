@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/plugin_runtime.dart';
 import '../services/settings_service.dart';
 
 class SettingsModel extends ChangeNotifier {
@@ -19,5 +20,9 @@ class SettingsModel extends ChangeNotifier {
   Future<void> set<T>(String key, T value) async {
     await _svc.set(key, value);
     notifyListeners();
+    PluginRuntime.instance.fireSettingsChange({
+      'key': key,
+      'value': value,
+    });
   }
 }
