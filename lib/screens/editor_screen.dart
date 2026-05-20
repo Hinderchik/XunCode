@@ -355,6 +355,12 @@ class _EditorScreenState extends State<EditorScreen> {
               backgroundColor: isError ? VscodeTheme.red : VscodeTheme.accent,
             ));
           });
+          PluginRuntime.instance.attachOpenFile((path) async {
+            final r = await FileService.readFile(path);
+            if (r != null && mounted) {
+              _openFile(r['path']!, r['name']!, r['content']!);
+            }
+          });
           unawaited(PluginRuntime.instance.activateInstalled());
         }
       },

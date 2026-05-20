@@ -1,21 +1,24 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/plugin.dart';
+import '../services/file_service.dart';
 import 'editor_bridge.dart';
 import 'plugin_service.dart';
 
 typedef UiCallback = void Function(String message, {bool isError});
+typedef OpenFileCallback = Future<void> Function(String path);
 
 class PluginSandbox {
   final InstalledPlugin plugin;
   final EditorBridge editor;
   final UiCallback onUiMessage;
+  final OpenFileCallback? onOpenFile;
 
   HeadlessInAppWebView? _headless;
   InAppWebViewController? _ctrl;
@@ -26,6 +29,7 @@ class PluginSandbox {
     required this.plugin,
     required this.editor,
     required this.onUiMessage,
+    this.onOpenFile,
   });
 
   Future<void> load() async {
@@ -182,9 +186,111 @@ class PluginSandbox {
       case 'http.post':
         return _httpPost(p);
 
+      // fs
+      case 'fs.readFile':
+        return _fsReadFile(p['path']?.toString() ?? '');
+      case 'fs.writeFile':
+        return _fsWriteFile(p['path']?.toString() ?? '', p['data']?.toString() ?? '');
+      case 'fs.delete':
+        return _fsDelete(p['path']?.toString() ?? '');
+      case 'fs.exists':
+        return _fsExists(p['path']?.toString() ?? '');
+      case 'fs.listDir':
+        return _fsListDir(p['path']?.toString() ?? '');
+
+      // workspace
+      case 'workspace.getRoot':
+        return (await FileService.appDataDir).path;
+      case 'workspace.findFiles':
+        return _workspaceFindFiles(p['pattern']?.toString() ?? '');
+      case 'workspace.openFile':
+        if (onOpenFile != null) await onOpenFile!(p['path']?.toString() ?? '');
+        return null;
+
       default:
         throw Exception('Unknown method: $method');
     }
+  }
+
+  Future<String?> _fsReadFile(String path) async {
+    final f = File(path);
+    if (!await f.exists()) return null;
+    return f.readAsString();
+  }
+
+  Future<void> _fsWriteFile(String path, String data) async {
+    final f = File(path);
+    await f.parent.create(recursive: true);
+    await f.writeAsString(data);
+  }
+
+  Future<bool> _fsDelete(String path) async {
+    final type = await FileSystemEntity.type(path);
+    if (type == FileSystemEntityType.notFound) return false;
+    if (type == FileSystemEntityType.directory) {
+      await Directory(path).delete(recursive: true);
+    } else {
+      await File(path).delete();
+    }
+    return true;
+  }
+
+  Future<bool> _fsExists(String path) async {
+    final type = await FileSystemEntity.type(path);
+    return type != FileSystemEntityType.notFound;
+  }
+
+  Future<List<Map<String, Object>>> _fsListDir(String path) async {
+    final dir = Directory(path);
+    if (!await dir.exists()) return [];
+    final out = <Map<String, Object>>[];
+    await for (final entity in dir.list(followLinks: false)) {
+      out.add({
+        'name': entity.path.split('/').last,
+        'path': entity.path,
+        'isDir': entity is Directory,
+      });
+    }
+    return out;
+  }
+
+  Future<List<String>> _workspaceFindFiles(String pattern) async {
+    final root = await FileService.appDataDir;
+    final results = <String>[];
+    final regex = _globToRegExp(pattern);
+    await for (final entity in root.list(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
+      final rel = entity.path.substring(root.path.length + 1);
+      if (regex.hasMatch(rel)) results.add(entity.path);
+      if (results.length >= 1000) break;
+    }
+    return results;
+  }
+
+  static RegExp _globToRegExp(String pattern) {
+    if (pattern.isEmpty) return RegExp(r'.*');
+    final sb = StringBuffer('^');
+    var i = 0;
+    while (i < pattern.length) {
+      final c = pattern[i];
+      if (c == '*') {
+        if (i + 1 < pattern.length && pattern[i + 1] == '*') {
+          sb.write('.*');
+          i += 2;
+          continue;
+        }
+        sb.write('[^/]*');
+      } else if (c == '?') {
+        sb.write('[^/]');
+      } else if ('.+()[]{}^\$\\|'.contains(c)) {
+        sb.write('\\$c');
+      } else {
+        sb.write(c);
+      }
+      i++;
+    }
+    sb.write(r'$');
+    return RegExp(sb.toString());
   }
 
   Future<String?> _storageGet(String key) async {
@@ -327,18 +433,18 @@ class PluginSandbox {
         };
 
         const fs = {
-          readFile: (path) => Promise.resolve(''),
-          writeFile: (path, data) => Promise.resolve(),
-          delete: (path) => Promise.resolve(),
-          exists: (path) => Promise.resolve(false),
-          listDir: (path) => Promise.resolve([]),
+          readFile: (path) => invoke('fs.readFile', { path: String(path) }),
+          writeFile: (path, data) => invoke('fs.writeFile', { path: String(path), data: String(data) }),
+          delete: (path) => invoke('fs.delete', { path: String(path) }),
+          exists: (path) => invoke('fs.exists', { path: String(path) }),
+          listDir: (path) => invoke('fs.listDir', { path: String(path) }),
           watch: (path, cb) => ({ dispose: () => {} }),
         };
 
         const workspace = {
-          getRoot: () => Promise.resolve(''),
-          openFile: (path) => Promise.resolve(),
-          findFiles: (pattern) => Promise.resolve([]),
+          getRoot: () => invoke('workspace.getRoot'),
+          openFile: (path) => invoke('workspace.openFile', { path: String(path) }),
+          findFiles: (pattern) => invoke('workspace.findFiles', { pattern: String(pattern || '**/*') }),
           onDidSaveFile: (cb) => on('onSave', cb),
           onDidOpenFile: (cb) => on('onFileOpen', cb),
         };

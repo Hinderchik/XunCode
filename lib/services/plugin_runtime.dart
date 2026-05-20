@@ -12,6 +12,7 @@ class PluginRuntime {
   final Map<String, PluginSandbox> _active = {};
   EditorBridge? _editor;
   void Function(String message, {bool isError})? _uiNotifier;
+  Future<void> Function(String path)? _openFile;
 
   void attachEditor(EditorBridge bridge) {
     _editor = bridge;
@@ -19,6 +20,10 @@ class PluginRuntime {
 
   void attachUi(void Function(String message, {bool isError}) notifier) {
     _uiNotifier = notifier;
+  }
+
+  void attachOpenFile(Future<void> Function(String path) openFile) {
+    _openFile = openFile;
   }
 
   Future<void> activateInstalled() async {
@@ -37,6 +42,7 @@ class PluginRuntime {
       onUiMessage: (msg, {bool isError = false}) {
         _uiNotifier?.call(msg, isError: isError);
       },
+      onOpenFile: _openFile,
     );
     try {
       await sandbox.load();
