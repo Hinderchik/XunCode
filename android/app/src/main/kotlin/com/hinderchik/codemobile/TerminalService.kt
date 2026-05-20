@@ -32,12 +32,32 @@ class TerminalService(private val appContext: Context) {
         return ext
     }
 
-    /** User-visible projects root, persists when the app is uninstalled. */
+    /**
+     * User-visible projects root. On Android 11+ writing to /storage/emulated/0
+     * requires MANAGE_EXTERNAL_STORAGE; if it's not granted (or the path is
+     * otherwise unwritable), fall back to a "Shared" folder under the app's
+     * external files dir, which is always accessible without permissions.
+     */
     fun sharedDir(): File {
         val external = Environment.getExternalStorageDirectory()
-        val dir = File(external, "Shared/CodeMobile")
-        if (!dir.exists()) dir.mkdirs()
-        return dir
+        val preferred = File(external, "Shared/CodeMobile")
+        if (canWriteTo(preferred)) return preferred
+
+        val fallback = File(appContext.getExternalFilesDir(null), "Shared/CodeMobile")
+        if (!fallback.exists()) fallback.mkdirs()
+        return fallback
+    }
+
+    private fun canWriteTo(dir: File): Boolean {
+        return try {
+            if (!dir.exists() && !dir.mkdirs()) return false
+            val probe = File(dir, ".cm-write-probe")
+            probe.writeText("ok")
+            probe.delete()
+            true
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     fun rootfsDir(): File {
