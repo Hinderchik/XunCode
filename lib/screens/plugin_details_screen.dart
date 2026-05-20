@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app/theme.dart';
 import '../models/plugin.dart';
+import '../services/plugin_runtime.dart';
 import '../services/plugin_service.dart';
 import '../services/review_service.dart';
 
@@ -50,7 +51,8 @@ class _PluginDetailsScreenState extends State<PluginDetailsScreen> {
   Future<void> _install() async {
     setState(() => _installing = true);
     try {
-      await PluginService.installFromGithub(widget.plugin.githubUrl);
+      final installed = await PluginService.installFromGithub(widget.plugin.githubUrl);
+      await PluginRuntime.instance.activate(installed);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('${widget.plugin.name} installed'),
@@ -72,6 +74,7 @@ class _PluginDetailsScreenState extends State<PluginDetailsScreen> {
 
   Future<void> _uninstall() async {
     setState(() => _installing = true);
+    await PluginRuntime.instance.deactivate(widget.plugin.id);
     await PluginService.uninstall(widget.plugin.id);
     if (!mounted) return;
     setState(() {

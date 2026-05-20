@@ -62,9 +62,19 @@ class PluginRuntime {
     try {
       await sandbox.load();
       _active[p.id] = sandbox;
-    } catch (_) {
+    } catch (e) {
+      _uiNotifier?.call('Plugin "${p.name}" failed to load: $e', isError: true);
       await sandbox.dispose();
     }
+  }
+
+  bool isActive(String id) => _active.containsKey(id);
+
+  Set<String> get activeIds => Set.unmodifiable(_active.keys);
+
+  Future<void> reloadAll() async {
+    await deactivateAll();
+    await activateInstalled();
   }
 
   Future<void> deactivate(String id) async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app/theme.dart';
 import '../models/plugin.dart';
+import '../services/plugin_runtime.dart';
 import '../services/plugin_service.dart';
 import 'plugin_details_screen.dart';
 
@@ -48,13 +49,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Future<void> _install(Plugin plugin) async {
     setState(() => _installedIds = {..._installedIds, plugin.id}); // optimistic
     try {
-      await PluginService.installFromGithub(plugin.githubUrl);
+      final installed = await PluginService.installFromGithub(plugin.githubUrl);
+      // Activate immediately so the user can use the plugin without a restart.
+      await PluginRuntime.instance.activate(installed);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('${plugin.name} installed'),
         backgroundColor: VscodeTheme.accent,
       ));
-      // Refresh so the download counter updates in the card.
       _load();
     } catch (e) {
       if (!mounted) return;
@@ -67,6 +69,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Future<void> _uninstall(Plugin plugin) async {
+    await PluginRuntime.instance.deactivate(plugin.id);
     await PluginService.uninstall(plugin.id);
     if (!mounted) return;
     setState(() => _installedIds = _installedIds.where((id) => id != plugin.id).toSet());
