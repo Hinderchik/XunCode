@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app/theme.dart';
 import '../models/github_user.dart';
 import '../models/settings_model.dart';
+import '../services/file_service.dart';
 import '../services/github_oauth_service.dart';
 import 'about_screen.dart';
 import 'github_signin_screen.dart';
@@ -20,11 +21,34 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   GithubUser? _githubUser;
   bool _githubLoading = true;
+  bool _hasAllFiles = false;
+  bool _sharedPublic = false;
+  String _sharedPath = '';
+  String _privatePath = '';
 
   @override
   void initState() {
     super.initState();
     _loadGithub();
+    _loadStorage();
+  }
+
+  Future<void> _loadStorage() async {
+    await FileService.ensureLayout();
+    final has = await FileService.hasAllFilesAccess();
+    if (!mounted) return;
+    setState(() {
+      _hasAllFiles = has;
+      _sharedPublic = FileService.sharedIsPublic;
+      _sharedPath = FileService.sharedRoot;
+      _privatePath = FileService.privateRoot;
+    });
+  }
+
+  Future<void> _grantStorage() async {
+    await FileService.requestAllFilesAccess();
+    // Re-check after a short delay so the UI updates when the user returns.
+    Future.delayed(const Duration(seconds: 1), _loadStorage);
   }
 
   Future<void> _loadGithub() async {
@@ -113,6 +137,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _section('Network'),
           _toggle(context, 'Tor Proxy (via Orbot)', s.torEnabled,
             (v) => s.set('torEnabled', v)),
+          _section('Storage'),
+          _buildStorageInfo(),
           _section('Developer'),
           _toggle(context, 'Developer Mode', s.developerMode,
             (v) => s.set('developerMode', v)),
@@ -193,7 +219,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _section(String title) => Padding(
+  Widget _buildStorageInfo() {
+    return Column(
+      children: [
+        ListTile(
+          tileColor: VscodeTheme.bgSidebar,
+          dense: true,
+          leading: Icon(
+            _sharedPublic ? Icons.folder_shared_outlined : Icons.folder_off_outlined,
+            size: 18,
+            color: _sharedPublic ? VscodeTheme.accent : VscodeTheme.red,
+          ),
+          title: const Text('Projects folder',
+            style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+          subtitle: Text(
+            _sharedPath.isEmpty
+                ? 'Resolving…'
+                : (_sharedPublic
+                    ? _sharedPath
+                    : '$_sharedPath\n(app-private fallback — files removed on uninstall)'),
+            style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
+          ),
+          isThreeLine: !_sharedPublic && _sharedPath.isNotEmpty,
+        ),
+        ListTile(
+          tileColor: VscodeTheme.bgSidebar,
+          dense: true,
+          leading: const Icon(Icons.lock_outline, size: 18, color: VscodeTheme.fgMuted),
+          title: const Text('App data',
+            style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+          subtitle: Text(
+            _privatePath.isEmpty ? 'Resolving…' : _privatePath,
+            style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
+          ),
+        ),
+        if (!_hasAllFiles)
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.shield_outlined, size: 18, color: VscodeTheme.accent),
+            title: const Text('Grant All Files Access',
+              style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: const Text(
+              'Lets the app save projects to /Shared/CodeMobile so they survive uninstall',
+              style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
+            ),
+            trailing: const Icon(Icons.open_in_new, size: 14, color: VscodeTheme.accent),
+            onTap: _grantStorage,
+          ),
+      ],
+    );
+  }
+
     padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
     child: Text(title.toUpperCase(),
       style: const TextStyle(fontSize: 11, color: VscodeTheme.fgLabel,
