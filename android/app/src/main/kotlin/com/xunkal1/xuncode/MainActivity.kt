@@ -99,6 +99,10 @@ class MainActivity : FlutterActivity() {
                     terminalService.killAll()
                     result.success(true)
                 }
+                "clearRootfs" -> {
+                    runCatching { terminalService.clearRootfs() }
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }

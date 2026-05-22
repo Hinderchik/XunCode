@@ -9,6 +9,7 @@ import '../services/github_oauth_service.dart';
 import '../services/language_service.dart';
 import '../services/plugin_runtime.dart';
 import '../services/plugin_service.dart';
+import '../services/terminal_service.dart';
 import 'about_screen.dart';
 import 'github_signin_screen.dart';
 import 'installed_plugins_screen.dart';
@@ -98,6 +99,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final lang = LanguageService.of(context, listen: false);
     await lang.refresh();
     if (mounted) setState(() {});
+  }
+
+  Future<void> _clearTerminalCache() async {
+    final lang = LanguageService.of(context, listen: false);
+    await TerminalBridge.clearAlpineCache();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(lang.tr('terminal.clear_cache_done')),
+      backgroundColor: VscodeTheme.accent,
+    ));
   }
 
   @override
@@ -222,6 +233,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           _section(lang.tr('settings.section.storage')),
           _buildStorageInfo(lang),
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.cleaning_services_outlined,
+                size: 18, color: VscodeTheme.accent),
+            title: Text(lang.tr('terminal.clear_cache'),
+                style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: Text(lang.tr('terminal.clear_cache_subtitle'),
+                style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            isThreeLine: true,
+            onTap: _clearTerminalCache,
+          ),
 
           _section(lang.tr('settings.section.developer')),
           _toggle(context, lang.tr('settings.developer.mode'), s.developerMode,

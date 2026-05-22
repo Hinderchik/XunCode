@@ -26,6 +26,15 @@ class SettingsService {
   int get completionDelayMs => _prefs.getInt('completion.delayMs') ?? 150;
   int get completionMaxItems => _prefs.getInt('completion.maxItems') ?? 50;
 
+  // Маркеры одноразовых bootstrap-операций. Хранятся под нейтральными
+  // ключами, чтобы при следующем апгрейде можно было поднять версию и
+  // переинициализировать без миграции.
+  String? get bundleVersion => _prefs.getString('lang.bundleVersion');
+  Future<void> setBundleVersion(String v) => _prefs.setString('lang.bundleVersion', v);
+
+  bool get alpineInstalled => _prefs.getBool('alpine.installed') ?? false;
+  Future<void> setAlpineInstalled(bool v) => _prefs.setBool('alpine.installed', v);
+
   Future<void> set<T>(String key, T value) async {
     if (value is String) await _prefs.setString(key, value);
     else if (value is bool) await _prefs.setBool(key, value);

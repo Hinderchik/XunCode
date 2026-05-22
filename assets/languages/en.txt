@@ -58,6 +58,9 @@ terminal.proot_help=A full Linux shell needs proot. The "limited shell" works wi
 terminal.retry_proot=Retry download proot
 terminal.use_limited_shell=Use limited shell
 terminal.type_command=Type a command…
+terminal.clear_cache=Clear terminal cache
+terminal.clear_cache_subtitle=Removes the unpacked Alpine rootfs. Next terminal launch will re-download it.
+terminal.clear_cache_done=Terminal cache cleared
 
 # Settings header
 settings.title=Settings

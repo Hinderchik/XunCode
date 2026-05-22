@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'file_service.dart';
 
@@ -15,8 +16,57 @@ class TerminalBridge {
   static const _events = EventChannel('com.xunkal1.xuncode/terminal/events');
 
   static Future<bool> isAlpineInstalled() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('alpine.installed') == true) {
+      // Доверяем флагу только если rootfs физически на месте: пользователь
+      // мог удалить /Android/data/.../rootfs вручную, и тогда proot упадёт.
+      try {
+        final root = await rootfsPath();
+        if (root.isNotEmpty) {
+          final marker = File('$root/.installed');
+          if (await marker.exists()) return true;
+          final dir = Directory(root);
+          if (await dir.exists() && await _hasContent(dir)) {
+            // rootfs распакован, а маркер потерялся — починим и подтвердим.
+            await marker.writeAsString('ok');
+            return true;
+          }
+        }
+      } catch (_) {}
+      // Файлы пропали — сбрасываем флаг, чтобы предложить переустановку.
+      await prefs.setBool('alpine.installed', false);
+    }
     final v = await _method.invokeMethod<bool>('isAlpineInstalled');
-    return v ?? false;
+    final installed = v ?? false;
+    if (installed) await prefs.setBool('alpine.installed', true);
+    return installed;
+  }
+
+  static Future<bool> _hasContent(Directory dir) async {
+    try {
+      await for (final _ in dir.list(followLinks: false)) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Полный сброс кэша терминала — удаляет распакованный Alpine rootfs и
+  /// SharedPreferences-маркер. После этого следующий запуск терминала
+  /// пройдёт через installAlpine заново.
+  static Future<void> clearAlpineCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('alpine.installed', false);
+    try {
+      final root = await rootfsPath();
+      if (root.isNotEmpty) {
+        final dir = Directory(root);
+        if (await dir.exists()) await dir.delete(recursive: true);
+      }
+    } catch (_) {}
+    try {
+      await _method.invokeMethod('clearRootfs');
+    } catch (_) {}
   }
 
   static Future<String> rootfsPath() async {
@@ -42,8 +92,11 @@ class TerminalBridge {
     return session;
   }
 
-  static Future<void> markAlpineInstalled() =>
-      _method.invokeMethod('markAlpineInstalled');
+  static Future<void> markAlpineInstalled() async {
+    await _method.invokeMethod('markAlpineInstalled');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('alpine.installed', true);
+  }
 
   /// Downloads the Alpine minirootfs and extracts it into the app's filesDir.
   /// Calls [onProgress] with bytes-received for download phase, then again

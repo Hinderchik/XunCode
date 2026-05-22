@@ -77,13 +77,19 @@ class LanguageService extends ChangeNotifier {
   }
 
   /// Перенести встроенные `.txt` из bundle в shared `Languages/`.
-  /// Перезаписывает встроенные файлы при каждом запуске, чтобы новые ключи
-  /// из обновления приложения попадали в общую папку. Пользовательские файлы
-  /// (которых нет в `_bundledLanguages`) остаются нетронутыми.
+  /// Делаем это только при первом запуске или при смене версии (мы пишем
+  /// маркер `_bundle_v` в SharedPreferences). Каждый старт без проверки
+  /// блокировал бы UI на 50–200 мс на типичном устройстве.
   Future<void> _ensureBundleCopied() async {
     await FileService.ensureLayout();
     final dir = Directory(FileService.languagesDir);
     if (!await dir.exists()) await dir.create(recursive: true);
+
+    const bundleVersion = '1';
+    final marker = _settings.bundleVersion;
+    final allBuiltinPresent = await _bundledLanguagesPresent(dir);
+    if (marker == bundleVersion && allBuiltinPresent) return;
+
     for (final code in _bundledLanguages) {
       try {
         final asset = 'assets/languages/$code.txt';
@@ -91,10 +97,18 @@ class LanguageService extends ChangeNotifier {
         final f = File('${dir.path}/$code.txt');
         await f.writeAsString(data, flush: true);
       } catch (_) {
-        // если ассет не упакован или нет доступа на запись — молча
-        // пропускаем, ниже всё равно будет фолбэк через rootBundle.
+        // Если ассет не упакован или нет доступа на запись — молча
+        // пропускаем. Tr() позже всё равно фолбэкнет на bundle через rootBundle.
       }
     }
+    await _settings.setBundleVersion(bundleVersion);
+  }
+
+  Future<bool> _bundledLanguagesPresent(Directory dir) async {
+    for (final code in _bundledLanguages) {
+      if (!await File('${dir.path}/$code.txt').exists()) return false;
+    }
+    return true;
   }
 
   Future<void> _scan() async {

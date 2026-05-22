@@ -57,6 +57,9 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Generate launcher icons from icon.png
+        run: flutter pub run flutter_launcher_icons:main
+
       - name: Analyze Dart sources
         run: flutter analyze --no-fatal-infos
 

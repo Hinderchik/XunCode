@@ -146,6 +146,14 @@ class TerminalService(private val appContext: Context) {
         File(rootfsDir(), ".installed").writeText("ok")
     }
 
+    /** Полный сброс распакованного Alpine rootfs. */
+    fun clearRootfs() {
+        killAll()
+        val d = rootfsDir()
+        runCatching { d.deleteRecursively() }
+        d.mkdirs()
+    }
+
     fun startUnsandboxed(id: String, sink: EventChannel.EventSink): String {
         kill(id)
         val session = TerminalSession(this, id, 80, 24, sink, useSystemSh = true)
