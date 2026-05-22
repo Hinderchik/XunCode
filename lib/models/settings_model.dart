@@ -17,6 +17,10 @@ class SettingsModel extends ChangeNotifier {
   bool get developerMode => _svc.developerMode;
   String get language => _svc.language;
 
+  bool get completionEnabled => _svc.completionEnabled;
+  int get completionDelayMs => _svc.completionDelayMs;
+  int get completionMaxItems => _svc.completionMaxItems;
+
   Future<void> set<T>(String key, T value) async {
     await _svc.set(key, value);
     notifyListeners();

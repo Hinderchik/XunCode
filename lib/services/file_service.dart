@@ -36,21 +36,21 @@ class FileNode {
   });
 }
 
-/// File-system entry points for CodeMobile.
+/// File-system entry points for XunCode.
 ///
 /// Layout (Android 11+, no extra permissions):
-///   privateRoot  = /storage/emulated/0/Android/data/com.hinderchik.codemobile/files
+///   privateRoot  = /storage/emulated/0/Android/data/com.xunkal1.xuncode/files
 ///                    ├── plugins/    cache/    rootfs/    proot/
 ///                    ├── prefs/      database/ logs/      tmp/
-///   sharedRoot   = /storage/emulated/0/Shared/CodeMobile
-///                    ├── Projects/   Downloads/  Backups/  Exports/
+///   sharedRoot   = /storage/emulated/0/Shared/XunCode
+///                    ├── Projects/   Downloads/  Backups/  Exports/  Languages/
 ///
 /// Both paths are resolved on first call and cached for the lifetime of the
 /// process. Call [FileService.ensureLayout] once at startup to make sure all
 /// subfolders exist; subsequent reads are then synchronous through the
 /// cached String-typed getters.
 class FileService {
-  static const _channel = MethodChannel('com.hinderchik.codemobile/storage');
+  static const _channel = MethodChannel('com.xunkal1.xuncode/storage');
 
   static String? _privateRoot;
   static String? _sharedRoot;
@@ -75,13 +75,13 @@ class FileService {
       } catch (_) {
         _privateRoot = (await getApplicationDocumentsDirectory()).path;
       }
-      _sharedRoot ??= '/storage/emulated/0/Shared/CodeMobile';
+      _sharedRoot ??= '/storage/emulated/0/Shared/XunCode';
       for (final sub in const [
         'plugins', 'cache', 'rootfs', 'proot', 'prefs', 'database', 'logs', 'tmp',
       ]) {
         await Directory('$_privateRoot/$sub').create(recursive: true);
       }
-      for (final sub in const ['Projects', 'Downloads', 'Backups', 'Exports']) {
+      for (final sub in const ['Projects', 'Downloads', 'Backups', 'Exports', 'Languages']) {
         try {
           await Directory('$_sharedRoot/$sub').create(recursive: true);
         } catch (_) {}
@@ -109,13 +109,19 @@ class FileService {
     } catch (_) {}
   }
 
-  /// True when the resolved [sharedRoot] is the public Shared/CodeMobile path
+  /// True when the resolved [sharedRoot] is the public Shared/XunCode path
   /// (visible in the user's file manager) vs the app-external fallback.
   static bool get sharedIsPublic =>
-      (_sharedRoot ?? '').contains('/storage/emulated/0/Shared/CodeMobile');
+      (_sharedRoot ?? '').contains('/storage/emulated/0/Shared/XunCode');
 
   static String get sharedRoot {
     final r = _sharedRoot;
+    if (r == null) throw StateError('FileService.ensureLayout() not called');
+    return r;
+  }
+
+  static String get privateRoot {
+    final r = _privateRoot;
     if (r == null) throw StateError('FileService.ensureLayout() not called');
     return r;
   }
@@ -135,6 +141,7 @@ class FileService {
   static String get downloadsDir => '$sharedRoot/Downloads';
   static String get backupsDir   => '$sharedRoot/Backups';
   static String get exportsDir   => '$sharedRoot/Exports';
+  static String get languagesDir => '$sharedRoot/Languages';
 
   /// Convenience: the user-facing projects folder as a Directory.
   static Future<Directory> projectsDirectory() async {

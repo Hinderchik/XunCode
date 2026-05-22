@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app/theme.dart';
-import '../services/tor_service.dart';
+import '../services/language_service.dart';
 
 class VscodeStatusBar extends StatelessWidget {
   final String fileName;
@@ -24,6 +24,7 @@ class VscodeStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = LanguageService.of(context);
     return Container(
       height: 22,
       color: VscodeTheme.statusBg,
@@ -31,21 +32,26 @@ class VscodeStatusBar extends StatelessWidget {
       child: Row(
         children: [
           _item(
-            torEnabled ? 'Tor: ON' : 'Tor: OFF',
+            torEnabled ? lang.tr('status.tor_on') : lang.tr('status.tor_off'),
             onTorTap,
             icon: torEnabled ? Icons.shield : Icons.shield_outlined,
             iconColor: torEnabled ? Colors.greenAccent : Colors.white70,
           ),
           const SizedBox(width: 8),
           Flexible(
-            child: _item(fileName.isEmpty ? 'No file open' : fileName, () {}, ellipsis: true),
+            child: _item(
+                fileName.isEmpty ? lang.tr('app.no_file_open') : fileName,
+                () {},
+                ellipsis: true),
           ),
           const Spacer(),
-          _item('Ln $line, Col $col', () {}),
+          _item(
+              lang.tr('status.line_col', params: {'line': line, 'col': col}),
+              () {}),
           const SizedBox(width: 8),
           _item(language, onLangTap),
           const SizedBox(width: 8),
-          _item('UTF-8', () {}),
+          _item(lang.tr('status.encoding'), () {}),
         ],
       ),
     );

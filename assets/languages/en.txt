@@ -1,0 +1,142 @@
+# XunCode UI strings — English
+# Format: key=value. Lines starting with # and empty lines are ignored.
+# A literal "\n" in a value becomes a newline at runtime.
+_meta.name=English
+_meta.code=en
+
+# Generic
+common.ok=OK
+common.cancel=Cancel
+common.close=Close
+common.save=Save
+common.delete=Delete
+common.rename=Rename
+common.refresh=Refresh
+common.retry=Retry
+common.install=Install
+common.uninstall=Uninstall
+common.search=Search
+common.loading=Loading…
+
+# App
+app.title=XunCode
+app.no_file_open=No file open
+
+# Activity bar
+activity.explorer=Explorer
+activity.search=Search
+activity.extensions=Extensions
+activity.settings=Settings
+
+# Bottom nav (phone)
+nav.files=Files
+nav.search=Search
+nav.terminal=Terminal
+nav.plugins=Plugins
+nav.settings=Settings
+
+# Editor
+editor.input=Input
+editor.plugin_commands=Plugin commands
+editor.toggle_terminal=Toggle terminal
+
+# Tabs
+tabs.unsaved=•
+
+# Status bar
+status.tor_on=Tor: ON
+status.tor_off=Tor: OFF
+status.line_col=Ln {line}, Col {col}
+status.encoding=UTF-8
+
+# Terminal
+terminal.title=TERMINAL
+terminal.new_shell=New shell
+terminal.hide=Hide terminal
+terminal.alpine_size=Alpine Linux minirootfs (~3 MB)
+terminal.proot_help=A full Linux shell needs proot. The "limited shell" works without it but lacks python, apt, and most tools.
+terminal.retry_proot=Retry download proot
+terminal.use_limited_shell=Use limited shell
+terminal.type_command=Type a command…
+
+# Settings header
+settings.title=Settings
+
+# Settings sections
+settings.section.appearance=Appearance
+settings.section.editor=Editor
+settings.section.completion=Code Completion
+settings.section.language=Language
+settings.section.sync=Sync
+settings.section.plugins=Plugins
+settings.section.network=Network
+settings.section.storage=Storage
+settings.section.developer=Developer
+settings.section.about=About
+
+# Settings entries
+settings.theme=Theme
+settings.font_size=Font Size
+settings.font_family=Font Family
+settings.tab_size=Tab Size
+settings.word_wrap=Word Wrap
+settings.auto_save=Auto Save
+
+# Completion
+settings.completion.enabled=Enable code completion
+settings.completion.delay=Delay
+settings.completion.delay_value={ms}ms
+settings.completion.max_items=Max suggestions
+
+# Language
+settings.language.system=Use system language
+settings.language.open_folder=Open Languages folder
+settings.language.refresh=Refresh language list
+settings.language.folder_path=Folder: {path}
+settings.language.add_hint=Drop a .txt file with key=value pairs into this folder to add a new UI language. Use "_meta.name=Your name" inside the file to set its display name.
+
+# Github sync
+settings.github.signin=Sign in with GitHub
+settings.github.signin_subtitle=Sync settings and projects across devices
+settings.github.signed_in_subtitle=Connected to GitHub
+settings.github.signout=Sign out
+settings.github.repo_sync_soon=Repo sync coming soon — token stored securely.
+
+# Plugins
+settings.plugins.installed=Installed Plugins
+settings.plugins.installed_subtitle=Manage, reload, or uninstall
+settings.plugins.docs=Plugin documentation
+settings.plugins.docs_subtitle=Plugin API reference (RU / EN)
+
+# Network
+settings.network.tor=Tor Proxy (via Orbot)
+
+# Storage
+settings.storage.projects_folder=Projects folder
+settings.storage.resolving=Resolving…
+settings.storage.fallback_warning=(app-private fallback — files removed on uninstall)
+settings.storage.app_data=App data
+settings.storage.grant_access=Grant All Files Access
+settings.storage.grant_subtitle=Lets the app save projects to /Shared/XunCode so they survive uninstall
+
+# Developer
+settings.developer.mode=Developer Mode
+settings.developer.local_install_title=Local plugin install
+settings.developer.local_install_hint=Pick a folder with plugin.json + main.js (or paste a GitHub URL below). The plugin is copied into the app and activated immediately.
+settings.developer.pick_folder=Pick folder
+settings.developer.from_url=From URL
+settings.developer.install_from_github=Install from GitHub
+settings.developer.github_url_hint=https://github.com/owner/repo
+
+# About
+settings.about.version=Version
+settings.about.platform=Platform
+settings.about.platform_value=Flutter · Android
+settings.about.about_link=About XunCode
+
+# Errors / status
+errors.install_failed=Install failed: {error}
+errors.proot_download_failed=proot download failed: {error}
+
+# Notifications
+notify.installed={name} installed

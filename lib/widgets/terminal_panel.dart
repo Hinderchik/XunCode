@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../app/theme.dart';
+import '../services/language_service.dart';
 import '../services/terminal_service.dart';
 
 /// Embedded terminal panel — multi-tab proot+Alpine shells. Designed to be
@@ -156,6 +156,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   }
 
   Widget _buildHeader() {
+    final lang = LanguageService.of(context);
     return Container(
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -167,8 +168,8 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
         children: [
           const Icon(Icons.terminal, size: 14, color: VscodeTheme.fgMuted),
           const SizedBox(width: 6),
-          const Text('TERMINAL',
-            style: TextStyle(fontSize: 11, color: VscodeTheme.fgLabel,
+          Text(lang.tr('terminal.title'),
+            style: const TextStyle(fontSize: 11, color: VscodeTheme.fgLabel,
               letterSpacing: 1, fontWeight: FontWeight.w600)),
           const SizedBox(width: 12),
           if (_tabs.isNotEmpty)
@@ -205,7 +206,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
           IconButton(
             icon: const Icon(Icons.add, size: 16),
             color: VscodeTheme.fgMuted,
-            tooltip: 'New shell',
+            tooltip: lang.tr('terminal.new_shell'),
             onPressed: _installing ? null : _newTab,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -214,7 +215,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
             IconButton(
               icon: const Icon(Icons.keyboard_arrow_down, size: 18),
               color: VscodeTheme.fgMuted,
-              tooltip: 'Hide terminal',
+              tooltip: lang.tr('terminal.hide'),
               onPressed: widget.onClose,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -225,6 +226,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   }
 
   Widget _buildInstaller() {
+    final lang = LanguageService.of(context);
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -241,7 +243,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
             minHeight: 3,
           ),
           const SizedBox(height: 6),
-          Text('Alpine Linux minirootfs (~3 MB)',
+          Text(lang.tr('terminal.alpine_size'),
             style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
         ],
       ),
@@ -249,6 +251,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   }
 
   Widget _buildError() {
+    final lang = LanguageService.of(context);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -259,11 +262,10 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
             textAlign: TextAlign.center,
             style: const TextStyle(color: VscodeTheme.fg, fontSize: 12)),
           const SizedBox(height: 4),
-          const Text(
-            'A full Linux shell needs proot. The "limited shell" works without '
-            'it but lacks python, apt, and most tools.',
+          Text(
+            lang.tr('terminal.proot_help'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
+            style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -273,7 +275,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
             children: [
               ElevatedButton.icon(
                 icon: const Icon(Icons.refresh, size: 14),
-                label: const Text('Retry download proot'),
+                label: Text(lang.tr('terminal.retry_proot')),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: VscodeTheme.accent,
                   foregroundColor: Colors.white,
@@ -285,7 +287,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.terminal, size: 14),
-                label: const Text('Use limited shell'),
+                label: Text(lang.tr('terminal.use_limited_shell')),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: VscodeTheme.fgMuted,
                   side: const BorderSide(color: VscodeTheme.border),
@@ -303,11 +305,13 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   }
 
   Widget _buildTabs() {
+    final lang = LanguageService.of(context);
     if (_tabs.isEmpty) {
       return Center(
         child: TextButton.icon(
           icon: const Icon(Icons.add, size: 14),
-          label: const Text('New shell', style: TextStyle(fontSize: 12)),
+          label: Text(lang.tr('terminal.new_shell'),
+              style: const TextStyle(fontSize: 12)),
           onPressed: _newTab,
         ),
       );
@@ -478,6 +482,7 @@ class _TerminalViewState extends State<_TerminalView> {
   );
 
   Widget _buildPrompt() {
+    final lang = LanguageService.of(context);
     return Container(
       decoration: const BoxDecoration(
         color: VscodeTheme.bgPanel,
@@ -500,12 +505,12 @@ class _TerminalViewState extends State<_TerminalView> {
               keyboardType: TextInputType.visiblePassword,
               style: const TextStyle(
                 color: VscodeTheme.fg, fontFamily: 'monospace', fontSize: 13),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                 border: InputBorder.none,
-                hintText: 'Type a command…',
-                hintStyle: TextStyle(color: VscodeTheme.fgMuted, fontSize: 12),
+                hintText: lang.tr('terminal.type_command'),
+                hintStyle: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 12),
               ),
               textInputAction: TextInputAction.go,
               onSubmitted: (_) => _submit(),

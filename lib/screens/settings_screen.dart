@@ -6,6 +6,7 @@ import '../models/github_user.dart';
 import '../models/settings_model.dart';
 import '../services/file_service.dart';
 import '../services/github_oauth_service.dart';
+import '../services/language_service.dart';
 import '../services/plugin_runtime.dart';
 import '../services/plugin_service.dart';
 import 'about_screen.dart';
@@ -79,13 +80,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _githubUser = null);
   }
 
+  Future<void> _openLanguagesFolder() async {
+    final lang = LanguageService.of(context, listen: false);
+    final path = FileService.languagesDir;
+    final uri = Uri.parse('file://$path');
+    final opened = await canLaunchUrl(uri).then((ok) =>
+      ok ? launchUrl(uri, mode: LaunchMode.externalApplication) : Future.value(false));
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(lang.tr('settings.language.folder_path', params: {'path': path})),
+        backgroundColor: VscodeTheme.accent,
+      ));
+    }
+  }
+
+  Future<void> _refreshLanguages() async {
+    final lang = LanguageService.of(context, listen: false);
+    await lang.refresh();
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = context.watch<SettingsModel>();
+    final lang = context.watch<LanguageService>();
     return Scaffold(
       backgroundColor: VscodeTheme.bg,
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(lang.tr('settings.title')),
         backgroundColor: VscodeTheme.bgSidebar,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: VscodeTheme.fgMuted),
@@ -94,71 +116,132 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         children: [
-          _section('Appearance'),
-          _dropdown(context, 'Theme', s.themeMode == ThemeMode.dark ? 'dark' : 'light',
-            ['dark', 'light'], (v) => s.set('theme', v!)),
-          _slider(context, 'Font Size', s.fontSize, 10, 24,
+          _section(lang.tr('settings.section.appearance')),
+          _dropdown(context, lang.tr('settings.theme'),
+            s.themeMode == ThemeMode.dark ? 'dark' : 'light',
+            const ['dark', 'light'], (v) => s.set('theme', v!)),
+          _slider(context, lang.tr('settings.font_size'), s.fontSize, 10, 24,
             (v) => s.set('fontSize', v)),
-          _dropdown(context, 'Font Family', s.fontFamily,
-            ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'monospace'],
+          _dropdown(context, lang.tr('settings.font_family'), s.fontFamily,
+            const ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'monospace'],
             (v) => s.set('fontFamily', v!)),
-          _section('Editor'),
-          _dropdown(context, 'Tab Size', s.tabSize.toString(),
-            ['2', '4', '8'], (v) => s.set('tabSize', int.parse(v!))),
-          _toggle(context, 'Word Wrap', s.wordWrap, (v) => s.set('wordWrap', v)),
-          _dropdown(context, 'Auto Save', s.autoSave,
-            ['off', 'afterDelay', 'onFocusChange'],
+
+          _section(lang.tr('settings.section.editor')),
+          _dropdown(context, lang.tr('settings.tab_size'), s.tabSize.toString(),
+            const ['2', '4', '8'], (v) => s.set('tabSize', int.parse(v!))),
+          _toggle(context, lang.tr('settings.word_wrap'), s.wordWrap,
+            (v) => s.set('wordWrap', v)),
+          _dropdown(context, lang.tr('settings.auto_save'), s.autoSave,
+            const ['off', 'afterDelay', 'onFocusChange'],
             (v) => s.set('autoSave', v!)),
-          _section('Sync'),
-          _buildGithubSync(),
-          _section('Plugins'),
+
+          _section(lang.tr('settings.section.completion')),
+          _toggle(context, lang.tr('settings.completion.enabled'),
+            s.completionEnabled, (v) => s.set('completion.enabled', v)),
+          _intSlider(
+            context,
+            label: lang.tr('settings.completion.delay'),
+            value: s.completionDelayMs,
+            min: 0,
+            max: 500,
+            step: 50,
+            valueLabel: lang.tr('settings.completion.delay_value',
+                params: {'ms': s.completionDelayMs}),
+            onChanged: (v) => s.set('completion.delayMs', v),
+          ),
+          _intSlider(
+            context,
+            label: lang.tr('settings.completion.max_items'),
+            value: s.completionMaxItems,
+            min: 10,
+            max: 100,
+            step: 5,
+            valueLabel: '${s.completionMaxItems}',
+            onChanged: (v) => s.set('completion.maxItems', v),
+          ),
+
+          _section(lang.tr('settings.section.language')),
+          ..._buildLanguageOptions(s, lang),
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.folder_open, size: 18, color: VscodeTheme.accent),
+            title: Text(lang.tr('settings.language.open_folder'),
+                style: const TextStyle(color: VscodeTheme.accent, fontSize: 13)),
+            subtitle: Text(
+              lang.tr('settings.language.folder_path', params: {'path': FileService.languagesDir}),
+              style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
+            ),
+            trailing: const Icon(Icons.open_in_new, size: 14, color: VscodeTheme.accent),
+            onTap: _openLanguagesFolder,
+          ),
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.refresh, size: 18, color: VscodeTheme.accent),
+            title: Text(lang.tr('settings.language.refresh'),
+                style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: Text(lang.tr('settings.language.add_hint'),
+                style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            isThreeLine: true,
+            onTap: _refreshLanguages,
+          ),
+
+          _section(lang.tr('settings.section.sync')),
+          _buildGithubSync(lang),
+
+          _section(lang.tr('settings.section.plugins')),
           ListTile(
             tileColor: VscodeTheme.bgSidebar,
             dense: true,
             leading: const Icon(Icons.extension_outlined, size: 18, color: VscodeTheme.accent),
-            title: const Text('Installed Plugins',
-              style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-            subtitle: const Text('Manage, reload, or uninstall',
-              style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            title: Text(lang.tr('settings.plugins.installed'),
+                style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: Text(lang.tr('settings.plugins.installed_subtitle'),
+                style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
             trailing: const Icon(Icons.chevron_right, size: 16, color: VscodeTheme.fgMuted),
             onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const InstalledPluginsScreen())),
+                MaterialPageRoute(builder: (_) => const InstalledPluginsScreen())),
           ),
           ListTile(
             tileColor: VscodeTheme.bgSidebar,
             dense: true,
             leading: const Icon(Icons.menu_book_outlined, size: 18, color: VscodeTheme.accent),
-            title: const Text('Документация по плагинам',
-              style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-            subtitle: const Text('Plugin API reference (RU / EN)',
-              style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            title: Text(lang.tr('settings.plugins.docs'),
+                style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: Text(lang.tr('settings.plugins.docs_subtitle'),
+                style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
             trailing: const Icon(Icons.chevron_right, size: 16, color: VscodeTheme.fgMuted),
             onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const PluginDocsScreen())),
+                MaterialPageRoute(builder: (_) => const PluginDocsScreen())),
           ),
-          _section('Network'),
-          _toggle(context, 'Tor Proxy (via Orbot)', s.torEnabled,
-            (v) => s.set('torEnabled', v)),
-          _section('Storage'),
-          _buildStorageInfo(),
-          _section('Developer'),
-          _toggle(context, 'Developer Mode', s.developerMode,
-            (v) => s.set('developerMode', v)),
-          if (s.developerMode) _devModePanel(context),
-          _section('About'),
-          _info('Version', '1.0.0'),
-          _info('Platform', 'Flutter · Android'),
+
+          _section(lang.tr('settings.section.network')),
+          _toggle(context, lang.tr('settings.network.tor'), s.torEnabled,
+              (v) => s.set('torEnabled', v)),
+
+          _section(lang.tr('settings.section.storage')),
+          _buildStorageInfo(lang),
+
+          _section(lang.tr('settings.section.developer')),
+          _toggle(context, lang.tr('settings.developer.mode'), s.developerMode,
+              (v) => s.set('developerMode', v)),
+          if (s.developerMode) _devModePanel(context, lang),
+
+          _section(lang.tr('settings.section.about')),
+          _info(lang.tr('settings.about.version'), '1.0.0'),
+          _info(lang.tr('settings.about.platform'), lang.tr('settings.about.platform_value')),
           _link(context, 'GitHub: @Hinderchik', 'https://github.com/Hinderchik'),
           _link(context, 'Dev channel: t.me/XunKal1Dev', 'https://t.me/XunKal1Dev'),
           _link(context, 'Community: t.me/GodPassTGK', 'https://t.me/GodPassTGK'),
           ListTile(
             tileColor: VscodeTheme.bgSidebar,
             dense: true,
-            title: const Text('About VScode Mobile',
-              style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            title: Text(lang.tr('settings.about.about_link'),
+                style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
             trailing: const Icon(Icons.chevron_right, size: 16, color: VscodeTheme.fgMuted),
             onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const AboutScreen())),
+                MaterialPageRoute(builder: (_) => const AboutScreen())),
           ),
           const SizedBox(height: 32),
         ],
@@ -166,7 +249,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildGithubSync() {
+  List<Widget> _buildLanguageOptions(SettingsModel s, LanguageService lang) {
+    final tiles = <Widget>[
+      RadioListTile<String>(
+        value: 'system',
+        groupValue: s.language,
+        tileColor: VscodeTheme.bgSidebar,
+        dense: true,
+        activeColor: VscodeTheme.accent,
+        title: Text(lang.tr('settings.language.system'),
+            style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+        onChanged: (v) => _selectLanguage(s, lang, v ?? 'system'),
+      ),
+    ];
+    for (final entry in lang.available) {
+      tiles.add(RadioListTile<String>(
+        value: entry.code,
+        groupValue: s.language,
+        tileColor: VscodeTheme.bgSidebar,
+        dense: true,
+        activeColor: VscodeTheme.accent,
+        title: Text(entry.displayName,
+            style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+        subtitle: Text(entry.code,
+            style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 10)),
+        onChanged: (v) => _selectLanguage(s, lang, v ?? entry.code),
+      ));
+    }
+    return tiles;
+  }
+
+  Future<void> _selectLanguage(SettingsModel s, LanguageService lang, String code) async {
+    await s.set('language', code);
+    await lang.setLanguage(code);
+  }
+
+  Widget _buildGithubSync(LanguageService lang) {
     if (_githubLoading) {
       return Container(
         color: VscodeTheme.bgSidebar,
@@ -184,10 +302,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         tileColor: VscodeTheme.bgSidebar,
         dense: true,
         leading: const Icon(Icons.code, size: 18, color: VscodeTheme.accent),
-        title: const Text('Sign in with GitHub',
-          style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-        subtitle: const Text('Sync settings and projects across devices',
-          style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+        title: Text(lang.tr('settings.github.signin'),
+            style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+        subtitle: Text(lang.tr('settings.github.signin_subtitle'),
+            style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
         trailing: const Icon(Icons.chevron_right, size: 16, color: VscodeTheme.fgMuted),
         onTap: _signIn,
       );
@@ -201,27 +319,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? CircleAvatar(radius: 14, backgroundImage: NetworkImage(user.avatarUrl!))
               : const CircleAvatar(radius: 14, child: Icon(Icons.person, size: 16)),
           title: Text('@${user.login}',
-            style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-          subtitle: Text(user.name ?? 'Connected to GitHub',
-            style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+              style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+          subtitle: Text(user.name ?? lang.tr('settings.github.signed_in_subtitle'),
+              style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
           trailing: TextButton(
             onPressed: _signOut,
-            child: const Text('Sign out',
-              style: TextStyle(color: VscodeTheme.red, fontSize: 12)),
+            child: Text(lang.tr('settings.github.signout'),
+                style: const TextStyle(color: VscodeTheme.red, fontSize: 12)),
           ),
         ),
         Container(
           color: VscodeTheme.bgSidebar,
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           alignment: Alignment.centerLeft,
-          child: const Text('Repo sync coming soon — token stored securely.',
-            style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 10)),
+          child: Text(lang.tr('settings.github.repo_sync_soon'),
+              style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 10)),
         ),
       ],
     );
   }
 
-  Widget _buildStorageInfo() {
+  Widget _buildStorageInfo(LanguageService lang) {
     return Column(
       children: [
         ListTile(
@@ -232,14 +350,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             size: 18,
             color: _sharedPublic ? VscodeTheme.accent : VscodeTheme.red,
           ),
-          title: const Text('Projects folder',
-            style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+          title: Text(lang.tr('settings.storage.projects_folder'),
+              style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
           subtitle: Text(
             _sharedPath.isEmpty
-                ? 'Resolving…'
+                ? lang.tr('settings.storage.resolving')
                 : (_sharedPublic
                     ? _sharedPath
-                    : '$_sharedPath\n(app-private fallback — files removed on uninstall)'),
+                    : '$_sharedPath\n${lang.tr('settings.storage.fallback_warning')}'),
             style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
           ),
           isThreeLine: !_sharedPublic && _sharedPath.isNotEmpty,
@@ -248,10 +366,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           tileColor: VscodeTheme.bgSidebar,
           dense: true,
           leading: const Icon(Icons.lock_outline, size: 18, color: VscodeTheme.fgMuted),
-          title: const Text('App data',
-            style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+          title: Text(lang.tr('settings.storage.app_data'),
+              style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
           subtitle: Text(
-            _privatePath.isEmpty ? 'Resolving…' : _privatePath,
+            _privatePath.isEmpty ? lang.tr('settings.storage.resolving') : _privatePath,
             style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
           ),
         ),
@@ -260,11 +378,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             tileColor: VscodeTheme.bgSidebar,
             dense: true,
             leading: const Icon(Icons.shield_outlined, size: 18, color: VscodeTheme.accent),
-            title: const Text('Grant All Files Access',
-              style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-            subtitle: const Text(
-              'Lets the app save projects to /Shared/CodeMobile so they survive uninstall',
-              style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
+            title: Text(lang.tr('settings.storage.grant_access'),
+                style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: Text(
+              lang.tr('settings.storage.grant_subtitle'),
+              style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
             ),
             trailing: const Icon(Icons.open_in_new, size: 14, color: VscodeTheme.accent),
             onTap: _grantStorage,
@@ -273,86 +391,126 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-    padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-    child: Text(title.toUpperCase(),
-      style: const TextStyle(fontSize: 11, color: VscodeTheme.fgLabel,
-        letterSpacing: 1, fontWeight: FontWeight.w600)),
-  );
+  Widget _section(String title) => Container(
+        color: VscodeTheme.bg,
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+        alignment: Alignment.centerLeft,
+        child: Text(title.toUpperCase(),
+            style: const TextStyle(
+                fontSize: 11,
+                color: VscodeTheme.fgLabel,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w600)),
+      );
 
   Widget _toggle(BuildContext ctx, String label, bool value, ValueChanged<bool> onChanged) =>
-    SwitchListTile(
-      title: Text(label, style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-      value: value,
-      onChanged: onChanged,
-      activeColor: VscodeTheme.accent,
-      tileColor: VscodeTheme.bgSidebar,
-      dense: true,
-    );
+      SwitchListTile(
+        title: Text(label, style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+        value: value,
+        onChanged: onChanged,
+        activeColor: VscodeTheme.accent,
+        tileColor: VscodeTheme.bgSidebar,
+        dense: true,
+      );
 
   Widget _dropdown(BuildContext ctx, String label, String value,
-      List<String> options, ValueChanged<String?> onChanged) =>
-    ListTile(
-      tileColor: VscodeTheme.bgSidebar,
-      dense: true,
-      title: Text(label, style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-      trailing: DropdownButton<String>(
-        value: value,
-        dropdownColor: VscodeTheme.bgInput,
-        style: const TextStyle(color: VscodeTheme.fg, fontSize: 13),
-        underline: const SizedBox(),
-        items: options.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
-        onChanged: onChanged,
-      ),
-    );
+          List<String> options, ValueChanged<String?> onChanged) =>
+      ListTile(
+        tileColor: VscodeTheme.bgSidebar,
+        dense: true,
+        title: Text(label, style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+        trailing: DropdownButton<String>(
+          value: value,
+          dropdownColor: VscodeTheme.bgInput,
+          style: const TextStyle(color: VscodeTheme.fg, fontSize: 13),
+          underline: const SizedBox(),
+          items: options
+              .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      );
 
-  Widget _slider(BuildContext ctx, String label, double value,
-      double min, double max, ValueChanged<double> onChanged) =>
-    ListTile(
+  Widget _slider(BuildContext ctx, String label, double value, double min, double max,
+          ValueChanged<double> onChanged) =>
+      ListTile(
+        tileColor: VscodeTheme.bgSidebar,
+        dense: true,
+        title: Text('$label: ${value.round()}px',
+            style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+        subtitle: Slider(
+          value: value,
+          min: min,
+          max: max,
+          divisions: (max - min).round(),
+          activeColor: VscodeTheme.accent,
+          onChanged: onChanged,
+          onChangeEnd: onChanged,
+        ),
+      );
+
+  Widget _intSlider(
+    BuildContext ctx, {
+    required String label,
+    required int value,
+    required int min,
+    required int max,
+    required int step,
+    required String valueLabel,
+    required ValueChanged<int> onChanged,
+  }) {
+    final divisions = ((max - min) / step).round();
+    return ListTile(
       tileColor: VscodeTheme.bgSidebar,
       dense: true,
-      title: Text('$label: ${value.round()}px',
-        style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+      title: Text('$label: $valueLabel',
+          style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
       subtitle: Slider(
-        value: value, min: min, max: max, divisions: (max - min).round(),
+        value: value.toDouble().clamp(min.toDouble(), max.toDouble()),
+        min: min.toDouble(),
+        max: max.toDouble(),
+        divisions: divisions,
         activeColor: VscodeTheme.accent,
-        onChanged: onChanged,
-        onChangeEnd: onChanged,
+        onChanged: (v) {
+          final stepped = (v / step).round() * step;
+          onChanged(stepped.clamp(min, max));
+        },
       ),
     );
+  }
 
   Widget _info(String label, String value) => ListTile(
-    tileColor: VscodeTheme.bgSidebar,
-    dense: true,
-    title: Text(label, style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
-    trailing: Text(value, style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 12)),
-  );
+        tileColor: VscodeTheme.bgSidebar,
+        dense: true,
+        title: Text(label, style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+        trailing: Text(value, style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 12)),
+      );
 
   Widget _link(BuildContext ctx, String label, String url) => ListTile(
-    tileColor: VscodeTheme.bgSidebar,
-    dense: true,
-    title: Text(label, style: const TextStyle(color: VscodeTheme.accent, fontSize: 13)),
-    trailing: const Icon(Icons.open_in_new, size: 14, color: VscodeTheme.accent),
-    onTap: () async {
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    },
-  );
+        tileColor: VscodeTheme.bgSidebar,
+        dense: true,
+        title: Text(label, style: const TextStyle(color: VscodeTheme.accent, fontSize: 13)),
+        trailing: const Icon(Icons.open_in_new, size: 14, color: VscodeTheme.accent),
+        onTap: () async {
+          final uri = Uri.parse(url);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        },
+      );
 
-  Widget _devModePanel(BuildContext ctx) {
+  Widget _devModePanel(BuildContext ctx, LanguageService lang) {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Local plugin install',
-            style: TextStyle(color: VscodeTheme.fgLabel, fontSize: 12)),
+          Text(lang.tr('settings.developer.local_install_title'),
+              style: const TextStyle(color: VscodeTheme.fgLabel, fontSize: 12)),
           const SizedBox(height: 4),
-          const Text(
-            'Pick a folder with plugin.json + main.js (or paste a GitHub URL '
-            'below). The plugin is copied into the app and activated immediately.',
-            style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
+          Text(
+            lang.tr('settings.developer.local_install_hint'),
+            style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
           ),
           const SizedBox(height: 10),
           Row(
@@ -361,7 +519,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _installLocalPluginFolder,
                   icon: const Icon(Icons.folder_open, size: 16),
-                  label: const Text('Pick folder'),
+                  label: Text(lang.tr('settings.developer.pick_folder')),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: VscodeTheme.bgInput,
                     foregroundColor: VscodeTheme.fg,
@@ -373,7 +531,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _installFromGithubUrl,
                   icon: const Icon(Icons.cloud_download, size: 16),
-                  label: const Text('From URL'),
+                  label: Text(lang.tr('settings.developer.from_url')),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: VscodeTheme.accent,
                     foregroundColor: Colors.white,
@@ -388,27 +546,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _installFromGithubUrl() async {
+    final lang = LanguageService.of(context, listen: false);
     final ctrl = TextEditingController();
     final url = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: VscodeTheme.bgSidebar,
-        title: const Text('Install from GitHub',
-          style: TextStyle(color: VscodeTheme.fg, fontSize: 14)),
+        title: Text(lang.tr('settings.developer.install_from_github'),
+            style: const TextStyle(color: VscodeTheme.fg, fontSize: 14)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           style: const TextStyle(color: VscodeTheme.fg, fontSize: 13),
-          decoration: const InputDecoration(
-            hintText: 'https://github.com/owner/repo',
+          decoration: InputDecoration(
+            hintText: lang.tr('settings.developer.github_url_hint'),
           ),
           onSubmitted: (v) => Navigator.pop(context, v.trim()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(lang.tr('common.cancel'))),
           TextButton(
             onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-            child: const Text('Install', style: TextStyle(color: VscodeTheme.accent)),
+            child: Text(lang.tr('common.install'),
+                style: const TextStyle(color: VscodeTheme.accent)),
           ),
         ],
       ),
@@ -419,19 +579,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await PluginRuntime.instance.activate(installed);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${installed.name} installed'),
+        content: Text(lang.tr('notify.installed', params: {'name': installed.name})),
         backgroundColor: VscodeTheme.accent,
       ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Install failed: $e'),
+        content: Text(lang.tr('errors.install_failed', params: {'error': e})),
         backgroundColor: VscodeTheme.red,
       ));
     }
   }
 
   Future<void> _installLocalPluginFolder() async {
+    final lang = LanguageService.of(context, listen: false);
     final picked = await FileService.importFolder();
     if (picked == null) return;
     try {
@@ -439,13 +600,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await PluginRuntime.instance.activate(installed);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${installed.name} installed'),
+        content: Text(lang.tr('notify.installed', params: {'name': installed.name})),
         backgroundColor: VscodeTheme.accent,
       ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Install failed: $e'),
+        content: Text(lang.tr('errors.install_failed', params: {'error': e})),
         backgroundColor: VscodeTheme.red,
       ));
     }

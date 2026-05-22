@@ -1,4 +1,4 @@
-package com.hinderchik.codemobile
+package com.xunkal1.xuncode
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -6,10 +6,10 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val TOR_CHANNEL = "com.hinderchik.codemobile/tor"
-    private val TERMINAL_CHANNEL = "com.hinderchik.codemobile/terminal"
-    private val TERMINAL_EVENTS = "com.hinderchik.codemobile/terminal/events"
-    private val STORAGE_CHANNEL = "com.hinderchik.codemobile/storage"
+    private val TOR_CHANNEL = "com.xunkal1.xuncode/tor"
+    private val TERMINAL_CHANNEL = "com.xunkal1.xuncode/terminal"
+    private val TERMINAL_EVENTS = "com.xunkal1.xuncode/terminal/events"
+    private val STORAGE_CHANNEL = "com.xunkal1.xuncode/storage"
 
     private lateinit var terminalService: TerminalService
     private val sinks = mutableMapOf<String, EventChannel.EventSink>()
@@ -129,7 +129,7 @@ class MainActivity : FlutterActivity() {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                         result.success(android.os.Environment.isExternalStorageManager())
                     } else {
-                        result.success(true) // pre-R doesn't need it
+                        result.success(true)
                     }
                 }
                 "requestAllFilesAccess" -> {
@@ -151,7 +151,7 @@ class MainActivity : FlutterActivity() {
                         listOf("plugins", "cache", "rootfs", "proot", "prefs", "database", "logs", "tmp")
                             .forEach { java.io.File(app, it).mkdirs() }
                         val shared = terminalService.sharedDir()
-                        listOf("Projects", "Downloads", "Backups", "Exports")
+                        listOf("Projects", "Downloads", "Backups", "Exports", "Languages")
                             .forEach { java.io.File(shared, it).mkdirs() }
                     }
                     result.success(true)

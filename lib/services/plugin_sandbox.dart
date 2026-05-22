@@ -492,6 +492,9 @@ class PluginSandbox {
             onSettingsChange: (cb) => on('onSettingsChange', cb),
           },
         };
+        // XunCode rebrand: same API surface, exposed under the new namespace.
+        // Old plugins keep working through window.vscode.
+        window.xuncode = window.vscode;
 
         const moduleObj = { exports: {} };
         window.module = moduleObj;

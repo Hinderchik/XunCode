@@ -1,0 +1,142 @@
+# XunCode UI строки — русский
+# Формат: ключ=значение. Строки, начинающиеся с #, и пустые игнорируются.
+# Последовательность "\n" в значении превращается в перенос строки.
+_meta.name=Русский
+_meta.code=ru
+
+# Общее
+common.ok=OK
+common.cancel=Отмена
+common.close=Закрыть
+common.save=Сохранить
+common.delete=Удалить
+common.rename=Переименовать
+common.refresh=Обновить
+common.retry=Повторить
+common.install=Установить
+common.uninstall=Удалить
+common.search=Поиск
+common.loading=Загрузка…
+
+# Приложение
+app.title=XunCode
+app.no_file_open=Нет открытых файлов
+
+# Activity bar
+activity.explorer=Проводник
+activity.search=Поиск
+activity.extensions=Расширения
+activity.settings=Настройки
+
+# Нижняя навигация (телефон)
+nav.files=Файлы
+nav.search=Поиск
+nav.terminal=Терминал
+nav.plugins=Плагины
+nav.settings=Настройки
+
+# Редактор
+editor.input=Ввод
+editor.plugin_commands=Команды плагинов
+editor.toggle_terminal=Переключить терминал
+
+# Вкладки
+tabs.unsaved=•
+
+# Статус-бар
+status.tor_on=Tor: ВКЛ
+status.tor_off=Tor: ВЫКЛ
+status.line_col=Стр {line}, Кол {col}
+status.encoding=UTF-8
+
+# Терминал
+terminal.title=ТЕРМИНАЛ
+terminal.new_shell=Новый shell
+terminal.hide=Скрыть терминал
+terminal.alpine_size=Alpine Linux minirootfs (~3 МБ)
+terminal.proot_help=Полноценный Linux shell требует proot. Ограниченный shell работает без него, но не имеет python, apt и большинства утилит.
+terminal.retry_proot=Скачать proot ещё раз
+terminal.use_limited_shell=Запустить ограниченный shell
+terminal.type_command=Введите команду…
+
+# Заголовок настроек
+settings.title=Настройки
+
+# Разделы настроек
+settings.section.appearance=Внешний вид
+settings.section.editor=Редактор
+settings.section.completion=Автодополнение
+settings.section.language=Язык
+settings.section.sync=Синхронизация
+settings.section.plugins=Плагины
+settings.section.network=Сеть
+settings.section.storage=Хранилище
+settings.section.developer=Разработчик
+settings.section.about=О приложении
+
+# Пункты настроек
+settings.theme=Тема
+settings.font_size=Размер шрифта
+settings.font_family=Семейство шрифтов
+settings.tab_size=Размер табуляции
+settings.word_wrap=Перенос строк
+settings.auto_save=Автосохранение
+
+# Автодополнение
+settings.completion.enabled=Включить автодополнение
+settings.completion.delay=Задержка
+settings.completion.delay_value={ms} мс
+settings.completion.max_items=Макс. подсказок
+
+# Язык
+settings.language.system=Как в системе
+settings.language.open_folder=Открыть папку Languages
+settings.language.refresh=Обновить список языков
+settings.language.folder_path=Папка: {path}
+settings.language.add_hint=Положите .txt файл с парами ключ=значение в эту папку, чтобы добавить свой язык. Используйте "_meta.name=Имя" внутри файла, чтобы задать отображаемое название.
+
+# Github синхронизация
+settings.github.signin=Войти через GitHub
+settings.github.signin_subtitle=Синхронизация настроек и проектов между устройствами
+settings.github.signed_in_subtitle=Подключено к GitHub
+settings.github.signout=Выйти
+settings.github.repo_sync_soon=Синхронизация репозиториев скоро — токен хранится безопасно.
+
+# Плагины
+settings.plugins.installed=Установленные плагины
+settings.plugins.installed_subtitle=Управление, перезагрузка, удаление
+settings.plugins.docs=Документация по плагинам
+settings.plugins.docs_subtitle=Справочник Plugin API (RU / EN)
+
+# Сеть
+settings.network.tor=Tor Proxy (через Orbot)
+
+# Хранилище
+settings.storage.projects_folder=Папка проектов
+settings.storage.resolving=Определяется…
+settings.storage.fallback_warning=(приватный fallback — удалится при удалении приложения)
+settings.storage.app_data=Данные приложения
+settings.storage.grant_access=Дать доступ ко всем файлам
+settings.storage.grant_subtitle=Позволяет сохранять проекты в /Shared/XunCode, чтобы они переживали переустановку
+
+# Разработчик
+settings.developer.mode=Режим разработчика
+settings.developer.local_install_title=Локальная установка плагина
+settings.developer.local_install_hint=Выберите папку с plugin.json + main.js или вставьте GitHub URL ниже. Плагин будет скопирован и сразу активирован.
+settings.developer.pick_folder=Выбрать папку
+settings.developer.from_url=Из URL
+settings.developer.install_from_github=Установить из GitHub
+settings.developer.github_url_hint=https://github.com/owner/repo
+
+# О приложении
+settings.about.version=Версия
+settings.about.platform=Платформа
+settings.about.platform_value=Flutter · Android
+settings.about.about_link=О XunCode
+
+# Ошибки / статус
+errors.install_failed=Установка не удалась: {error}
+errors.proot_download_failed=Не удалось скачать proot: {error}
+
+# Уведомления
+notify.installed={name} установлен

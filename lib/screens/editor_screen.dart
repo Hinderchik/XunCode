@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 import '../app/theme.dart';
 import '../models/open_file.dart';
 import '../models/settings_model.dart';
+import '../services/completion_service.dart';
 import '../services/file_service.dart';
+import '../services/language_service.dart';
 import '../services/tor_service.dart';
 import '../services/plugin_runtime.dart';
 import '../services/editor_bridge.dart';
@@ -71,12 +73,24 @@ class _EditorScreenState extends State<EditorScreen> {
     filesModel.open(OpenFile(uri: path, name: name, content: content));
     _loadInEditor(content, name);
     PluginRuntime.instance.fireFileOpen(path);
+    _maybeIndexProject(path);
     final width = MediaQuery.of(context).size.width;
     if (width < _kTabletBreakpoint) {
       if (Navigator.canPop(context)) Navigator.pop(context);
       _scaffoldKey.currentState?.closeDrawer();
       setState(() => _sidebarVisible = false);
     }
+  }
+
+  void _maybeIndexProject(String filePath) {
+    // Index the projects root once per project. CompletionService is
+    // idempotent — repeated calls with the same root are cheap.
+    try {
+      final root = FileService.projectsDir;
+      if (CompletionService.instance.projectRoot != root) {
+        unawaited(CompletionService.instance.indexProject(root));
+      }
+    } catch (_) {}
   }
 
   void _loadInEditor(String content, String name) {
@@ -199,7 +213,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             heroTag: 'tablet-cmd',
                             backgroundColor: VscodeTheme.bgInput,
                             foregroundColor: VscodeTheme.accent,
-                            tooltip: 'Plugin commands',
+                            tooltip: LanguageService.of(context).tr('editor.plugin_commands'),
                             onPressed: () => showPluginCommandPalette(context),
                             child: const Icon(Icons.bolt_outlined, size: 18),
                           ),
@@ -208,7 +222,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             heroTag: 'tablet-term',
                             backgroundColor: VscodeTheme.bgInput,
                             foregroundColor: VscodeTheme.accent,
-                            tooltip: 'Toggle terminal',
+                            tooltip: LanguageService.of(context).tr('editor.toggle_terminal'),
                             onPressed: _toggleTerminal,
                             child: const Icon(Icons.terminal, size: 18),
                           ),
@@ -248,7 +262,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   heroTag: 'phone-cmd',
                   backgroundColor: VscodeTheme.bgInput,
                   foregroundColor: VscodeTheme.accent,
-                  tooltip: 'Plugin commands',
+                  tooltip: LanguageService.of(context).tr('editor.plugin_commands'),
                   onPressed: () => showPluginCommandPalette(context),
                   child: const Icon(Icons.bolt_outlined, size: 16),
                 ),
@@ -292,6 +306,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildPhoneNav() {
+    final lang = LanguageService.of(context);
     return BottomNavigationBar(
       backgroundColor: VscodeTheme.bgSidebar,
       selectedItemColor: VscodeTheme.accent,
@@ -321,12 +336,12 @@ class _EditorScreenState extends State<EditorScreen> {
             break;
         }
       },
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.folder_outlined, size: 20), label: 'Files'),
-        BottomNavigationBarItem(icon: Icon(Icons.search, size: 20), label: 'Search'),
-        BottomNavigationBarItem(icon: Icon(Icons.terminal, size: 20), label: 'Terminal'),
-        BottomNavigationBarItem(icon: Icon(Icons.extension_outlined, size: 20), label: 'Plugins'),
-        BottomNavigationBarItem(icon: Icon(Icons.settings_outlined, size: 20), label: 'Settings'),
+      items: [
+        BottomNavigationBarItem(icon: const Icon(Icons.folder_outlined, size: 20), label: lang.tr('nav.files')),
+        BottomNavigationBarItem(icon: const Icon(Icons.search, size: 20), label: lang.tr('nav.search')),
+        BottomNavigationBarItem(icon: const Icon(Icons.terminal, size: 20), label: lang.tr('nav.terminal')),
+        BottomNavigationBarItem(icon: const Icon(Icons.extension_outlined, size: 20), label: lang.tr('nav.plugins')),
+        BottomNavigationBarItem(icon: const Icon(Icons.settings_outlined, size: 20), label: lang.tr('nav.settings')),
       ],
     );
   }
@@ -444,6 +459,32 @@ class _EditorScreenState extends State<EditorScreen> {
         PluginRuntime.instance.fireSave(args[0]);
       },
     );
+    ctrl.addJavaScriptHandler(
+      handlerName: 'getCompletions',
+      callback: (args) async {
+        if (!settings.completionEnabled) return const [];
+        final params = args.isNotEmpty && args.first is Map
+            ? Map<String, dynamic>.from(args.first as Map)
+            : const <String, dynamic>{};
+        final lang = (params['language'] ?? 'plaintext').toString();
+        final prefix = (params['prefix'] ?? '').toString();
+        final path = (params['path'] ?? '').toString();
+        final maxItems = params['maxItems'] is num
+            ? (params['maxItems'] as num).toInt()
+            : settings.completionMaxItems;
+        try {
+          final items = await CompletionService.instance.suggest(
+            language: lang,
+            prefix: prefix,
+            currentFilePath: path.isEmpty ? null : path,
+            maxItems: maxItems,
+          );
+          return items;
+        } catch (_) {
+          return const [];
+        }
+      },
+    );
   }
 
   Future<void> _applySettings(SettingsModel s) async {
@@ -454,15 +495,24 @@ class _EditorScreenState extends State<EditorScreen> {
       'wordWrap': s.wordWrap ? 'on' : 'off',
     });
     await _webCtrl?.evaluateJavascript(source: 'window.applySettings && window.applySettings($payload);');
+    final completionPayload = jsonEncode({
+      'enabled': s.completionEnabled,
+      'delayMs': s.completionDelayMs,
+      'maxItems': s.completionMaxItems,
+    });
+    await _webCtrl?.evaluateJavascript(
+      source: 'window.applyCompletionSettings && window.applyCompletionSettings($completionPayload);',
+    );
   }
 
   Future<String?> _showPluginInputBox(String? title, String? placeholder, String? value) {
     final ctrl = TextEditingController(text: value ?? '');
+    final lang = LanguageService.of(context, listen: false);
     return showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: VscodeTheme.bgSidebar,
-        title: Text(title ?? 'Input',
+        title: Text(title ?? lang.tr('editor.input'),
           style: const TextStyle(color: VscodeTheme.fg, fontSize: 14)),
         content: TextField(
           controller: ctrl,
@@ -475,10 +525,10 @@ class _EditorScreenState extends State<EditorScreen> {
           onSubmitted: (v) => Navigator.pop(context, v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, null), child: Text(lang.tr('common.cancel'))),
           TextButton(
             onPressed: () => Navigator.pop(context, ctrl.text),
-            child: const Text('OK', style: TextStyle(color: VscodeTheme.accent)),
+            child: Text(lang.tr('common.ok'), style: const TextStyle(color: VscodeTheme.accent)),
           ),
         ],
       ),
@@ -486,6 +536,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<String?> _showPluginQuickPick(List<String> items, String? title) {
+    final lang = LanguageService.of(context, listen: false);
     return showModalBottomSheet<String>(
       context: context,
       backgroundColor: VscodeTheme.bgSidebar,
@@ -511,7 +562,8 @@ class _EditorScreenState extends State<EditorScreen> {
             ListTile(
               dense: true,
               leading: const Icon(Icons.close, size: 16, color: VscodeTheme.fgMuted),
-              title: const Text('Cancel', style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 12)),
+              title: Text(lang.tr('common.cancel'),
+                  style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 12)),
               onTap: () => Navigator.pop(context, null),
             ),
           ],

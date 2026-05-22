@@ -1,6 +1,8 @@
-# Plugin API Reference — VSCode Android
+# Plugin API Reference — XunCode (Android)
 
-VSCode Android plugins are JavaScript files that run inside the Monaco Editor WebView sandbox. Each plugin calls `VscodePlugin.register()` and receives a `ctx` object with full access to the editor, UI, hooks, storage, and HTTP.
+XunCode plugins are JavaScript files that run inside the Monaco Editor WebView sandbox. Each plugin calls `VscodePlugin.register()` and receives a `ctx` object with full access to the editor, UI, hooks, storage, and HTTP.
+
+> **`xuncode` ≡ `vscode`.** XunCode exposes the same API surface under both `window.vscode` and `window.xuncode`. Existing plugins keep working unchanged; new plugins may use either name.
 
 ---
 

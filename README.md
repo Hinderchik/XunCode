@@ -1,8 +1,10 @@
-# VScode Mobile for Android
+# XunCode for Android
 
-[![Build APK](https://github.com/Hinderchik/VScodeMobile/actions/workflows/build.yml/badge.svg)](https://github.com/Hinderchik/VScodeMobile/actions/workflows/build.yml)
+[![Build APK](https://github.com/Hinderchik/XunCode/actions/workflows/build.yml/badge.svg)](https://github.com/Hinderchik/XunCode/actions/workflows/build.yml)
 
 A native Android code editor built with Flutter — Monaco Editor, GitHub-based plugin system, plugin marketplace with reviews, and Tor proxy support. Designed to look and feel like VS Code.
+
+> **Heads up:** XunCode is the successor to VScode Mobile. The applicationId moved from `com.hinderchik.codemobile` to `com.xunkal1.xuncode`, so it installs side-by-side with the old build.
 
 **Marketplace:** [vscodemobile-market.vercel.app](https://vscodemobile-market.vercel.app)
 
@@ -13,9 +15,10 @@ A native Android code editor built with Flutter — Monaco Editor, GitHub-based 
 | Feature | Description |
 |---|---|
 | Monaco Editor | Same engine as VS Code — syntax highlighting for 25+ languages |
-| IntelliSense | Code completion, hints, and navigation support |
+| IntelliSense | Project-wide code completion, hints, and navigation |
+| Multi-language UI | Russian / English out of the box, drop your own `.txt` into `Shared/XunCode/Languages/` to add a new language |
 | Go to Definition | Jump to symbols and references inside code |
-| VSCode UI | Activity bar, sidebar, tabs, status bar |
+| Familiar UI | Activity bar, sidebar, tabs, status bar |
 | File Tools | Project tree, search across files, Git, FTP/SFTP support |
 | Plugin System | GitHub-based, sandboxed JS runtime with editor / fs / ui / http / hooks API |
 | Plugin Marketplace | Browse, install, rate and review community plugins |
@@ -31,8 +34,8 @@ A native Android code editor built with Flutter — Monaco Editor, GitHub-based 
 
 ## Download
 
-- **Latest debug APK** — [GitHub Actions artifacts](https://github.com/Hinderchik/VScodeMobile/actions)
-- **Release APK** — [GitHub Releases](https://github.com/Hinderchik/VScodeMobile/releases)
+- **Latest debug APK** — [GitHub Actions artifacts](https://github.com/Hinderchik/XunCode/actions)
+- **Release APK** — [GitHub Releases](https://github.com/Hinderchik/XunCode/releases)
 
 Requires Android 8.0+ (API 26).
 
@@ -50,8 +53,8 @@ Requires Android 8.0+ (API 26).
 
 ```sh
 # Clone
-git clone https://github.com/Hinderchik/VScodeMobile.git
-cd VScodeMobile
+git clone https://github.com/Hinderchik/XunCode.git
+cd XunCode
 
 # Bundle Monaco Editor assets
 npm install
@@ -62,6 +65,9 @@ bash scripts/fetch-proot.sh
 
 # Flutter deps
 flutter pub get
+
+# Generate launcher icons (uses icon.png)
+flutter pub run flutter_launcher_icons
 
 # Debug APK
 flutter build apk --debug
@@ -81,9 +87,44 @@ GitHub Actions builds and publishes the release APK automatically.
 
 ---
 
+## Storage layout
+
+XunCode creates these folders on first launch:
+
+```
+/storage/emulated/0/Android/data/com.xunkal1.xuncode/files/
+├── plugins/   cache/   rootfs/   proot/
+├── prefs/     database/  logs/    tmp/
+
+/storage/emulated/0/Shared/XunCode/
+├── Projects/   Downloads/   Backups/   Exports/
+└── Languages/   ← drop .txt files here to add UI translations
+```
+
+The shared folder is created via Storage Manager (`MANAGE_EXTERNAL_STORAGE`). If the user denies that permission, XunCode falls back to the app-private external dir under `Android/data/.../Shared/XunCode/` — the data is still accessible, but it disappears on uninstall.
+
+---
+
+## Localization
+
+UI strings live in plain `.txt` files (`key=value`, `#` comments). On first launch the bundled `ru.txt` and `en.txt` are extracted into `Shared/XunCode/Languages/`. Add another language by dropping a new file into that folder, e.g. `de.txt`:
+
+```
+_meta.name=Deutsch
+common.ok=OK
+common.cancel=Abbrechen
+…
+```
+
+Then open **Settings → Language → Refresh** to pick it up.
+
+---
+
 ## Plugin System
 
 Plugins are public GitHub repositories with two files in the root: `plugin.json` (manifest) and `main.js` (code). Each plugin runs in its own sandboxed `InAppWebView` and gets a `vscode` API surface.
+
+> The same surface is exposed as `xuncode` for forward compatibility — `window.vscode === window.xuncode` inside the sandbox, so existing plugins keep working untouched.
 
 ### Minimal plugin
 
@@ -109,13 +150,13 @@ exports.activate = (vscode) => {
 | `vscode.storage` | `get`, `set`, `delete`, `clear` (per-plugin namespace) |
 | `vscode.hooks` | `onSave`, `onFileOpen`, `onEditorChange`, `onCursorMove`, `onSettingsChange` |
 
-Full reference: in-app under Settings → Plugins → Документация по плагинам · or [assets/plugin-docs.html](assets/plugin-docs.html).
+Full reference: in-app under **Settings → Plugins → Plugin documentation**, or [assets/plugin-docs.html](assets/plugin-docs.html).
 
 ### Developer Mode
 
 1. Settings → Developer Mode → ON
-2. Settings → Developer → Load Local Plugin
-3. Paste your plugin code → runs immediately in the editor sandbox
+2. Settings → Developer → Pick folder *or* From URL
+3. Plugin runs immediately in the editor sandbox.
 
 ### Publishing to Marketplace
 
@@ -159,10 +200,10 @@ See [`market/README.md`](market/README.md) for the data layout and storage notes
 ```
 lib/
 ├── main.dart                    # App entry, MultiProvider
-├── app/theme.dart               # VSCode Dark+ color palette
+├── app/theme.dart               # Dark+ color palette
 ├── screens/
 │   ├── editor_screen.dart       # Main layout (activity bar + sidebar + Monaco + status)
-│   ├── settings_screen.dart     # Settings + plugin docs link
+│   ├── settings_screen.dart     # Settings, language, completion, plugin docs link
 │   ├── marketplace_screen.dart  # Plugin marketplace
 │   ├── plugin_details_screen.dart # Reviews, ratings, install/uninstall
 │   └── plugin_docs_screen.dart  # In-app API docs (WebView, RU/EN)
@@ -174,9 +215,11 @@ lib/
 │   ├── terminal_panel.dart      # proot + Alpine terminal
 │   └── file_tree.dart           # Recursive file tree
 ├── services/
+│   ├── language_service.dart    # .txt-based UI localization
+│   ├── completion_service.dart  # Project-wide IntelliSense (Dart/JS/TS/Python)
 │   ├── tor_service.dart         # Orbot broadcast intent + SOCKS5 status
 │   ├── plugin_service.dart      # Install from GitHub, list, uninstall
-│   ├── plugin_sandbox.dart      # Headless WebView + vscode.* API bridge
+│   ├── plugin_sandbox.dart      # Headless WebView + vscode/xuncode bridge
 │   ├── plugin_runtime.dart      # Active sandboxes registry, hooks fan-out
 │   ├── editor_bridge.dart       # Monaco operations exposed to plugins
 │   ├── review_service.dart      # Marketplace reviews + anonymous user token
@@ -188,13 +231,14 @@ lib/
     ├── plugin.dart              # Plugin / InstalledPlugin / Review
     └── open_file.dart           # Open tabs state
 
-android/app/src/main/kotlin/.../MainActivity.kt    # Tor + Terminal MethodChannels
-android/app/src/main/kotlin/.../TerminalService.kt # proot + Alpine sessions, downloadProot, /system/bin/sh fallback
-assets/editor.html                                  # Monaco init
-assets/plugin-docs.html                             # In-app API reference (RU/EN)
-assets/plugin-examples/hello-world/                 # Bundled minimal plugin
-example-plugins/hello-world/                        # Same example, easy to clone
-market/                                             # Vercel API + admin UI
+android/app/src/main/kotlin/com/xunkal1/xuncode/MainActivity.kt    # Tor + Terminal MethodChannels
+android/app/src/main/kotlin/com/xunkal1/xuncode/TerminalService.kt # proot + Alpine sessions, downloadProot, /system/bin/sh fallback
+assets/editor.html                                                  # Monaco init + completion bridge
+assets/languages/{ru,en}.txt                                        # Bundled UI translations
+assets/plugin-docs.html                                             # In-app API reference (RU/EN)
+assets/plugin-examples/hello-world/                                 # Bundled minimal plugin
+example-plugins/hello-world/                                        # Same example, easy to clone
+market/                                                             # Vercel API + admin UI
 ```
 
 ---

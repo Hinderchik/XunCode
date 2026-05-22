@@ -1,4 +1,4 @@
-package com.hinderchik.codemobile
+package com.xunkal1.xuncode
 
 import android.content.Context
 import android.os.Environment
@@ -17,14 +17,13 @@ import java.util.concurrent.ConcurrentHashMap
  * Storage layout:
  *  - Private:  context.getExternalFilesDir(null)
  *      = /storage/emulated/0/Android/data/<pkg>/files/
- *  - Shared:   <external>/Shared/CodeMobile/
- *      = /storage/emulated/0/Shared/CodeMobile/   (created via Environment)
+ *  - Shared:   <external>/Shared/XunCode/
+ *      = /storage/emulated/0/Shared/XunCode/   (created via Environment)
  */
 class TerminalService(private val appContext: Context) {
 
     private val sessions = ConcurrentHashMap<String, TerminalSession>()
 
-    /** Private app data root: /storage/emulated/0/Android/data/<pkg>/files. */
     fun appDataDir(): File {
         val ext = appContext.getExternalFilesDir(null)
             ?: appContext.filesDir
@@ -32,18 +31,12 @@ class TerminalService(private val appContext: Context) {
         return ext
     }
 
-    /**
-     * User-visible projects root. On Android 11+ writing to /storage/emulated/0
-     * requires MANAGE_EXTERNAL_STORAGE; if it's not granted (or the path is
-     * otherwise unwritable), fall back to a "Shared" folder under the app's
-     * external files dir, which is always accessible without permissions.
-     */
     fun sharedDir(): File {
         val external = Environment.getExternalStorageDirectory()
-        val preferred = File(external, "Shared/CodeMobile")
+        val preferred = File(external, "Shared/XunCode")
         if (canWriteTo(preferred)) return preferred
 
-        val fallback = File(appContext.getExternalFilesDir(null), "Shared/CodeMobile")
+        val fallback = File(appContext.getExternalFilesDir(null), "Shared/XunCode")
         if (!fallback.exists()) fallback.mkdirs()
         return fallback
     }
@@ -51,7 +44,7 @@ class TerminalService(private val appContext: Context) {
     private fun canWriteTo(dir: File): Boolean {
         return try {
             if (!dir.exists() && !dir.mkdirs()) return false
-            val probe = File(dir, ".cm-write-probe")
+            val probe = File(dir, ".xc-write-probe")
             probe.writeText("ok")
             probe.delete()
             true
@@ -75,10 +68,6 @@ class TerminalService(private val appContext: Context) {
     }
 
     fun downloadProot(): String {
-        // proot-me/proot-static-build is upstream's own static-build release.
-        // termux/proot-static is a Termux-maintained mirror of the same binaries
-        // with slightly different naming; useful as fallback when the upstream
-        // release is missing assets for some ABI.
         val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
         val proot = when (abi) {
             "arm64-v8a" -> "proot-aarch64"
@@ -164,10 +153,6 @@ class TerminalService(private val appContext: Context) {
         return session.start()
     }
 
-    /**
-     * Where the limited shell should land. Prefer the user-visible Shared
-     * folder if reachable, then external app dir, finally internal filesDir.
-     */
     fun appExternalHome(): String {
         val shared = sharedDir()
         if (shared.canRead()) return shared.absolutePath
@@ -203,8 +188,6 @@ class TerminalSession(
         }
 
         return try {
-            // Make sure the binary is executable. nativeLibraryDir entries are
-            // already 0755 in practice, but this is cheap insurance.
             runCatching { proot.setExecutable(true, false) }
 
             val shared = service.sharedDir().absolutePath
@@ -217,7 +200,7 @@ class TerminalSession(
                 "-b", "/sys",
                 "-b", "/dev/urandom:/dev/random",
                 "-b", "/proc/self/fd:/dev/fd",
-                "-b", "$shared:/sdcard/CodeMobile",
+                "-b", "$shared:/sdcard/XunCode",
                 "-b", "$shared:/home/user",
                 "-0",
                 "/bin/sh", "-l",
@@ -229,7 +212,7 @@ class TerminalSession(
                 put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
                 put("LANG", "C.UTF-8")
                 put("PROOT_TMP_DIR", File(service.appDataDir(), "tmp").absolutePath)
-                put("CODE_MOBILE_HOME", "/sdcard/CodeMobile")
+                put("XUNCODE_HOME", "/sdcard/XunCode")
                 put("COLUMNS", cols.toString())
                 put("LINES", rows.toString())
             }
@@ -311,8 +294,6 @@ class TerminalSession(
     fun resize(c: Int, r: Int) {
         cols = c
         rows = r
-        // No PTY ioctl in this minimal implementation. We update env vars on
-        // the next session start; running shells will not see the new size.
     }
 
     fun kill() {

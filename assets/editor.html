@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>VScode Mobile Editor</title>
+<title>XunCode Editor</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; background: #1e1e1e; overflow: hidden; }
@@ -91,23 +91,80 @@ require(['vs/editor/editor.main'], function() {
     return defs.find(d => d.name === name) || null;
   }
 
+  // Settings tweakable from Flutter via window.applyCompletionSettings.
+  window.__xc_completion = { enabled: true, delayMs: 150, maxItems: 50 };
+  window.applyCompletionSettings = function(s) {
+    if (!s) return;
+    if (typeof s.enabled === 'boolean') window.__xc_completion.enabled = s.enabled;
+    if (typeof s.delayMs === 'number') window.__xc_completion.delayMs = s.delayMs;
+    if (typeof s.maxItems === 'number') window.__xc_completion.maxItems = s.maxItems;
+  };
+
+  // Map our SymbolKind → monaco.languages.CompletionItemKind so that the
+  // suggestions panel shows a meaningful icon instead of the plain text bullet.
+  const _kindMap = {
+    method: monaco.languages.CompletionItemKind.Method,
+    function: monaco.languages.CompletionItemKind.Function,
+    constant: monaco.languages.CompletionItemKind.Constant,
+    variable: monaco.languages.CompletionItemKind.Variable,
+    klass: monaco.languages.CompletionItemKind.Class,
+    module: monaco.languages.CompletionItemKind.Module,
+    keyword: monaco.languages.CompletionItemKind.Keyword,
+    text: monaco.languages.CompletionItemKind.Text,
+  };
+
   const _langs = ['javascript','typescript','python','kotlin','java','dart','go','rust','c','cpp','csharp','html','css','scss','json','yaml','markdown','shell','xml','php','ruby','swift','sql','r','lua','plaintext'];
   _langs.forEach((lang) => {
     monaco.languages.registerCompletionItemProvider(lang, {
       triggerCharacters: ['.', ':', '_', '('],
-      provideCompletionItems: function(model, position) {
+      provideCompletionItems: async function(model, position) {
         const word = model.getWordUntilPosition(position);
         const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+
+        // Slow start: optional debounce so we don't fire on every keystroke.
+        const cfg = window.__xc_completion;
+        if (cfg && cfg.delayMs > 0) {
+          await new Promise(r => setTimeout(r, cfg.delayMs));
+        }
+
+        // Local words from the current document (always on, even when the
+        // remote provider is disabled — Monaco's built-in behavior).
         const words = new Set();
         const text = model.getValue();
         text.match(/[A-Za-z_$][\w$]*/g)?.forEach(w => words.add(w));
-        const suggestions = Array.from(words).slice(0, 200).map(w => ({
+        if (word.word) words.delete(word.word);
+        const localItems = Array.from(words).slice(0, 200).map(w => ({
           label: w,
           kind: monaco.languages.CompletionItemKind.Text,
           insertText: w,
           range,
         }));
-        return { suggestions };
+
+        // Remote symbols indexed by Flutter from the rest of the project.
+        let remoteItems = [];
+        if (cfg && cfg.enabled !== false && window.flutter_inappwebview) {
+          try {
+            const res = await window.flutter_inappwebview.callHandler('getCompletions', {
+              language: model.getLanguageId(),
+              prefix: word.word || '',
+              path: window.__xc_currentPath || '',
+              maxItems: (cfg && cfg.maxItems) || 50,
+            });
+            if (Array.isArray(res)) {
+              remoteItems = res.map(it => ({
+                label: it.label || '',
+                kind: _kindMap[it.kind] ?? monaco.languages.CompletionItemKind.Text,
+                insertText: it.insertText || it.label || '',
+                detail: it.detail || undefined,
+                documentation: it.documentation || undefined,
+                range,
+              }));
+            }
+          } catch (_) {
+            // Backend offline / not bridged yet — fall back to local words.
+          }
+        }
+        return { suggestions: [...remoteItems, ...localItems] };
       }
     });
 
@@ -187,6 +244,7 @@ require(['vs/editor/editor.main'], function() {
     model.uri = monaco.Uri.parse('file:///' + (filename || 'untitled'));
     _setCurrentModelMeta(language, filename);
     window.editor.setModel(model);
+    window.__xc_currentPath = filename || '';
     _refreshDefinitionCache();
   };
 

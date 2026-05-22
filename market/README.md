@@ -1,4 +1,4 @@
-# VScode Mobile Plugin Marketplace
+# XunCode Plugin Marketplace
 
 Vercel-hosted backend for the in-app marketplace.
 

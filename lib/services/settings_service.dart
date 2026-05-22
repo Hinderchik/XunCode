@@ -20,7 +20,11 @@ class SettingsService {
   String get autoSave => _prefs.getString('autoSave') ?? 'off';
   bool get torEnabled => _prefs.getBool('torEnabled') ?? false;
   bool get developerMode => _prefs.getBool('developerMode') ?? false;
-  String get language => _prefs.getString('language') ?? 'en';
+  String get language => _prefs.getString('language') ?? 'system';
+
+  bool get completionEnabled => _prefs.getBool('completion.enabled') ?? true;
+  int get completionDelayMs => _prefs.getInt('completion.delayMs') ?? 150;
+  int get completionMaxItems => _prefs.getInt('completion.maxItems') ?? 50;
 
   Future<void> set<T>(String key, T value) async {
     if (value is String) await _prefs.setString(key, value);

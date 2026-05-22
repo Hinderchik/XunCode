@@ -11,8 +11,8 @@ import 'file_service.dart';
 /// proot+Alpine shell process; output is pushed via an EventChannel and writes
 /// go through a MethodChannel.
 class TerminalBridge {
-  static const _method = MethodChannel('com.hinderchik.codemobile/terminal');
-  static const _events = EventChannel('com.hinderchik.codemobile/terminal/events');
+  static const _method = MethodChannel('com.xunkal1.xuncode/terminal');
+  static const _events = EventChannel('com.xunkal1.xuncode/terminal/events');
 
   static Future<bool> isAlpineInstalled() async {
     final v = await _method.invokeMethod<bool>('isAlpineInstalled');

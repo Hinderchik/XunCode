@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app/theme.dart';
+import '../services/language_service.dart';
 
 enum ActivityBarItem { explorer, search, extensions, settings }
 
@@ -11,17 +12,18 @@ class ActivityBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = LanguageService.of(context);
     return Container(
       width: 48,
       color: VscodeTheme.activityBg,
       child: Column(
         children: [
           const SizedBox(height: 8),
-          _item(ActivityBarItem.explorer, Icons.folder_outlined, 'Explorer'),
-          _item(ActivityBarItem.search, Icons.search, 'Search'),
-          _item(ActivityBarItem.extensions, Icons.extension_outlined, 'Extensions'),
+          _item(ActivityBarItem.explorer, Icons.folder_outlined, lang.tr('activity.explorer')),
+          _item(ActivityBarItem.search, Icons.search, lang.tr('activity.search')),
+          _item(ActivityBarItem.extensions, Icons.extension_outlined, lang.tr('activity.extensions')),
           const Spacer(),
-          _item(ActivityBarItem.settings, Icons.settings_outlined, 'Settings'),
+          _item(ActivityBarItem.settings, Icons.settings_outlined, lang.tr('activity.settings')),
           const SizedBox(height: 8),
         ],
       ),
