@@ -13,6 +13,7 @@ import '../services/terminal_service.dart';
 import 'about_screen.dart';
 import 'github_signin_screen.dart';
 import 'installed_plugins_screen.dart';
+import 'languages_screen.dart';
 import 'plugin_docs_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -202,6 +203,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildGithubSync(lang),
 
           _section(lang.tr('settings.section.plugins')),
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.code, size: 18, color: VscodeTheme.accent),
+            title: Text(lang.tr('languages.title'),
+                style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: Text(lang.tr('languages.subtitle'),
+                style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            trailing: const Icon(Icons.chevron_right, size: 16, color: VscodeTheme.fgMuted),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const LanguagesScreen())),
+          ),
           ListTile(
             tileColor: VscodeTheme.bgSidebar,
             dense: true,

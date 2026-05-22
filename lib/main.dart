@@ -5,6 +5,7 @@ import 'app/theme.dart';
 import 'models/settings_model.dart';
 import 'models/open_file.dart';
 import 'services/file_service.dart';
+import 'services/language_install_service.dart';
 import 'services/language_service.dart';
 import 'services/settings_service.dart';
 import 'screens/editor_screen.dart';
@@ -17,11 +18,14 @@ void main() async {
   await settings.init();
   final language = LanguageService(settings);
   await language.init();
+  final installer = LanguageInstallService.instance;
+  await installer.init();
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SettingsModel(settings)),
         ChangeNotifierProvider.value(value: language),
+        ChangeNotifierProvider.value(value: installer),
         ChangeNotifierProvider(create: (_) => OpenFilesModel()),
       ],
       child: const XunCodeApp(),

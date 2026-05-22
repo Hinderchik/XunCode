@@ -143,3 +143,36 @@ errors.proot_download_failed=Не удалось скачать proot: {error}
 
 # Уведомления
 notify.installed={name} установлен
+
+# Языки программирования
+languages.title=Языки программирования
+languages.subtitle=Установка сред и библиотек с официальных источников или своим ссылкам
+languages.tab.builtin=Встроенные
+languages.tab.custom=Свои
+languages.add_custom=Добавить свой язык
+languages.add_custom_hint=Вставьте прямую ссылку на .tar.gz / .tar.xz / .zip с собранной средой под вашу архитектуру (обычно arm64). После установки язык появится в списке для запуска кода.
+languages.empty_custom=Своих языков пока нет. Нажмите «Добавить свой язык», чтобы зарегистрировать собственную среду по URL.
+languages.field.id=ID
+languages.field.name=Название
+languages.field.version=Версия
+languages.field.url=Ссылка на архив
+languages.field.lib_manager=Менеджер библиотек (pip, npm, …)
+languages.field.registry=URL реестра
+languages.field.launch_command=Команда запуска (используйте %file%)
+languages.field.required=Обязательное поле
+languages.field.id_format=Только буквы, цифры, _ и -
+languages.field.url_format=Должна начинаться с http:// или https://
+languages.save=Сохранить
+languages.install_done={name} установлен
+languages.install_failed=Установка не удалась: {error}
+languages.uninstalled={name} удалён
+
+# Библиотеки
+libraries.title=Библиотеки
+libraries.title_for=Библиотеки — {name}
+libraries.search_hint=Поиск пакетов
+libraries.registry_hint=URL реестра (необязательно)
+libraries.registry_saved=URL реестра сохранён
+libraries.empty=Ничего не найдено
+libraries.copy_command=Скопировать команду установки
+libraries.copied=Команда скопирована

@@ -143,3 +143,36 @@ errors.proot_download_failed=proot download failed: {error}
 
 # Notifications
 notify.installed={name} installed
+
+# Programming languages
+languages.title=Programming languages
+languages.subtitle=Install runtimes and libraries from official sources or your own URLs
+languages.tab.builtin=Built-in
+languages.tab.custom=Custom
+languages.add_custom=Add custom language
+languages.add_custom_hint=Paste a direct link to a .tar.gz / .tar.xz / .zip archive of a runtime built for your CPU (usually arm64). After install the language appears in the launcher list.
+languages.empty_custom=No custom languages yet. Tap "Add custom language" to register your own runtime by URL.
+languages.field.id=ID
+languages.field.name=Name
+languages.field.version=Version
+languages.field.url=Download URL
+languages.field.lib_manager=Library manager (pip, npm, …)
+languages.field.registry=Registry URL
+languages.field.launch_command=Launch command (use %file%)
+languages.field.required=Required
+languages.field.id_format=Use letters, digits, _ or - only
+languages.field.url_format=Must start with http:// or https://
+languages.save=Save
+languages.install_done={name} installed
+languages.install_failed=Install failed: {error}
+languages.uninstalled={name} uninstalled
+
+# Libraries
+libraries.title=Libraries
+libraries.title_for=Libraries — {name}
+libraries.search_hint=Search packages
+libraries.registry_hint=Override registry URL (optional)
+libraries.registry_saved=Registry URL saved
+libraries.empty=No results
+libraries.copy_command=Copy install command
+libraries.copied=Command copied

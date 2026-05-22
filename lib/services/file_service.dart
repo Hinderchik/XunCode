@@ -135,6 +135,7 @@ class FileService {
   static String get dbDir      => '$privateRoot/database';
   static String get logsDir    => '$privateRoot/logs';
   static String get tmpDir     => '$privateRoot/tmp';
+  static String get languagesInstallDir => '$privateRoot/languages';
 
   // Shared (visible to user, NOT removed on uninstall) subfolders.
   static String get projectsDir  => '$sharedRoot/Projects';
