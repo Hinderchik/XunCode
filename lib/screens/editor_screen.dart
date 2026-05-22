@@ -369,50 +369,52 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildEditor(SettingsModel settings) {
-    return InAppWebView(
-      initialFile: 'assets/editor.html',
-      initialSettings: InAppWebViewSettings(
-        javaScriptEnabled: true,
-        allowFileAccessFromFileURLs: true,
-        allowUniversalAccessFromFileURLs: true,
-        supportZoom: false,
-        transparentBackground: true,
-        cacheEnabled: true,
-        cacheMode: CacheMode.LOAD_DEFAULT,
+    return RepaintBoundary(
+      child: InAppWebView(
+        initialFile: 'assets/editor.html',
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          allowFileAccessFromFileURLs: true,
+          allowUniversalAccessFromFileURLs: true,
+          supportZoom: false,
+          transparentBackground: true,
+          cacheEnabled: true,
+          cacheMode: CacheMode.LOAD_DEFAULT,
+        ),
+        onWebViewCreated: (ctrl) {
+          _webCtrl = ctrl;
+          _editorBridge = EditorBridge(ctrl, () => _currentLang);
+          _registerHandlers(ctrl, settings);
+        },
+        onLoadStop: (ctrl, _) async {
+          await _applySettings(settings);
+          if (_editorBridge != null) {
+            PluginRuntime.instance.attachEditor(_editorBridge!);
+            PluginRuntime.instance.attachUi((msg, {bool isError = false}) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(msg),
+                backgroundColor: isError ? VscodeTheme.red : VscodeTheme.accent,
+              ));
+            });
+            PluginRuntime.instance.attachOpenFile((path) async {
+              final r = await FileService.readFile(path);
+              if (r != null && mounted) {
+                _openFile(r['path']!, r['name']!, r['content']!);
+              }
+            });
+            PluginRuntime.instance.attachInputBox((title, placeholder, value) async {
+              if (!mounted) return null;
+              return _showPluginInputBox(title, placeholder, value);
+            });
+            PluginRuntime.instance.attachQuickPick((items, title) async {
+              if (!mounted) return null;
+              return _showPluginQuickPick(items, title);
+            });
+            unawaited(PluginRuntime.instance.activateInstalled());
+          }
+        },
       ),
-      onWebViewCreated: (ctrl) {
-        _webCtrl = ctrl;
-        _editorBridge = EditorBridge(ctrl, () => _currentLang);
-        _registerHandlers(ctrl, settings);
-      },
-      onLoadStop: (ctrl, _) async {
-        await _applySettings(settings);
-        if (_editorBridge != null) {
-          PluginRuntime.instance.attachEditor(_editorBridge!);
-          PluginRuntime.instance.attachUi((msg, {bool isError = false}) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(msg),
-              backgroundColor: isError ? VscodeTheme.red : VscodeTheme.accent,
-            ));
-          });
-          PluginRuntime.instance.attachOpenFile((path) async {
-            final r = await FileService.readFile(path);
-            if (r != null && mounted) {
-              _openFile(r['path']!, r['name']!, r['content']!);
-            }
-          });
-          PluginRuntime.instance.attachInputBox((title, placeholder, value) async {
-            if (!mounted) return null;
-            return _showPluginInputBox(title, placeholder, value);
-          });
-          PluginRuntime.instance.attachQuickPick((items, title) async {
-            if (!mounted) return null;
-            return _showPluginQuickPick(items, title);
-          });
-          unawaited(PluginRuntime.instance.activateInstalled());
-        }
-      },
     );
   }
 

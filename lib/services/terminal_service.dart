@@ -113,6 +113,18 @@ class TerminalBridge {
     final rootDir = Directory(root);
     if (!await rootDir.exists()) await rootDir.create(recursive: true);
 
+    // Дополнительная страховка: если папка непуста и в ней есть базовая
+    // структура (`bin/` или `etc/`), считаем установку завершённой и просто
+    // проставляем маркер — пользователь мог удалить только `.installed`,
+    // а 60+ MB unpacked rootfs трогать смысла нет.
+    final hasBin = await Directory('$root/bin').exists();
+    final hasEtc = await Directory('$root/etc').exists();
+    if (hasBin || hasEtc) {
+      onProgress?.call(1.0, 'Found existing rootfs');
+      await markAlpineInstalled();
+      return;
+    }
+
     final arch = _alpineArch();
     final url = 'https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/$arch/'
         'alpine-minirootfs-3.20.3-$arch.tar.gz';
