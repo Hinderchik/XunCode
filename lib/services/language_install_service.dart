@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -223,21 +222,13 @@ class LanguageInstallService extends ChangeNotifier {
       final input2 = InputFileStream(archivePath);
       try {
         if (lower.endsWith('.tar.xz') || lower.endsWith('.txz')) {
-          final tarPath = '${FileService.tmpDir}/${_basename(archivePath)}.tar';
-          final out = OutputFileStream(tarPath);
-          try {
-            XZDecoder().decodeStream(input2, out);
-          } finally {
-            await out.close();
-          }
-          final tarStream = InputFileStream(tarPath);
-          try {
-            archive = TarDecoder().decodeBuffer(tarStream);
-            await _writeArchive(archive, outDir, onProgress);
-          } finally {
-            await tarStream.close();
-          }
-          await _silent(() => File(tarPath).delete());
+          // XZDecoder в текущей версии archive не имеет decodeStream;
+          // читаем архив целиком в память и распаковываем побайтово.
+          await input2.close();
+          final bytes = await File(archivePath).readAsBytes();
+          final decodedBytes = XZDecoder().decodeBytes(bytes);
+          archive = TarDecoder().decodeBytes(decodedBytes);
+          await _writeArchive(archive, outDir, onProgress);
           return;
         }
         if (lower.endsWith('.tar')) {
@@ -252,7 +243,7 @@ class LanguageInstallService extends ChangeNotifier {
         }
         throw 'Unsupported archive format: $archivePath';
       } finally {
-        await input2.close();
+        await _silent(() => input2.close());
       }
     } finally {
       await _silent(() => input.close());
