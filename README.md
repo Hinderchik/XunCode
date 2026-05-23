@@ -40,13 +40,12 @@ flutter build apk --debug
 ```
 
 ### Лицензия
-Это **не open-source**. Форки, копирование, модификация, переупаковка, коммерческое использование запрещены без письменного согласия автора. Полный текст — в [LICENSE](LICENSE). Запросы на отдельное разрешение: [t.me/XunKal1Dev](https://t.me/XunKal1Dev).
+Это **не open-source**. Форки, копирование, модификация, переупаковка, коммерческое использование запрещены без письменного согласия автора. Полный текст — в [LICENSE](LICENSE). Запросы на отдельное разрешение: [t.me/Skuuuchn](https://t.me/Skuuuchn).
 
 ### Контакты
 - GitHub: [@Hinderchik](https://github.com/Hinderchik)
 - Dev-канал: [t.me/XunKal1Dev](https://t.me/XunKal1Dev)
 - Сообщество: [t.me/GodPassTGK](https://t.me/GodPassTGK)
-- Личка: [t.me/Skuuuchn](https://t.me/Skuuuchn)
 
 ---
 
@@ -83,10 +82,9 @@ flutter build apk --debug
 ```
 
 ### Licence
-**Not open source.** Forks, modification, redistribution, repackaging and commercial use are prohibited without prior written permission. See [LICENSE](LICENSE) for the full terms. For special permissions contact [t.me/XunKal1Dev](https://t.me/XunKal1Dev).
+**Not open source.** Forks, modification, redistribution, repackaging and commercial use are prohibited without prior written permission. See [LICENSE](LICENSE) for the full terms. For special permissions contact [t.me/Skuuuchn](https://t.me/Skuuuchn).
 
 ### Contacts
 - GitHub: [@Hinderchik](https://github.com/Hinderchik)
 - Dev channel: [t.me/XunKal1Dev](https://t.me/XunKal1Dev)
 - Community: [t.me/GodPassTGK](https://t.me/GodPassTGK)
-- DM: [t.me/Skuuuchn](https://t.me/Skuuuchn)
