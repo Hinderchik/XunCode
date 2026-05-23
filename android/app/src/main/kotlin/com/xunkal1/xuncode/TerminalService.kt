@@ -69,42 +69,48 @@ class TerminalService(private val appContext: Context) {
 
     fun downloadProot(): String {
         val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
-        val proot = when (abi) {
-            "arm64-v8a" -> "proot-aarch64"
-            "armeabi-v7a" -> "proot-armv7a"
-            "x86_64" -> "proot-x86_64"
-            "x86" -> "proot-x86"
-            else -> "proot-aarch64"
+        // Each ABI has multiple aliases across mirrors (termux uses different
+        // filenames than proot-static-build), so we try every combination.
+        val aliases: List<String> = when (abi) {
+            "arm64-v8a" -> listOf("proot-aarch64", "proot-arm64")
+            "armeabi-v7a" -> listOf("proot-armv7a", "proot-arm")
+            "x86_64" -> listOf("proot-x86_64")
+            "x86" -> listOf("proot-x86", "proot-i686")
+            else -> listOf("proot-aarch64")
         }
         val mirrors = listOf(
-            "https://github.com/proot-me/proot-static-build/releases/download/v5.4.0/$proot",
-            "https://github.com/proot-me/proot-static-build/releases/latest/download/$proot",
+            "https://github.com/termux/proot/releases/download/v5.3.0",
+            "https://github.com/proot-me/proot-static-build/releases/download/v5.4.0",
+            "https://github.com/proot-me/proot-static-build/releases/latest/download",
         )
         val out = fallbackProotBinary()
         out.parentFile?.mkdirs()
         var lastError: String? = null
-        for (url in mirrors) {
-            try {
-                val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection)
-                conn.connectTimeout = 15000
-                conn.readTimeout = 60000
-                conn.instanceFollowRedirects = true
-                conn.requestMethod = "GET"
-                if (conn.responseCode in 200..299) {
-                    conn.inputStream.use { input ->
-                        out.outputStream().use { output -> input.copyTo(output) }
+        for (mirror in mirrors) {
+            for (alias in aliases) {
+                val url = "$mirror/$alias"
+                try {
+                    val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection)
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 60000
+                    conn.instanceFollowRedirects = true
+                    conn.requestMethod = "GET"
+                    if (conn.responseCode in 200..299) {
+                        conn.inputStream.use { input ->
+                            out.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        if (out.length() < 1024) {
+                            out.delete()
+                            lastError = "downloaded file too small from $url"
+                            continue
+                        }
+                        out.setExecutable(true, false)
+                        return "ok"
                     }
-                    if (out.length() < 1024) {
-                        out.delete()
-                        lastError = "downloaded file too small from $url"
-                        continue
-                    }
-                    out.setExecutable(true, false)
-                    return "ok"
+                    lastError = "HTTP ${conn.responseCode} from $url"
+                } catch (t: Throwable) {
+                    lastError = "${t.javaClass.simpleName}: ${t.message}"
                 }
-                lastError = "HTTP ${conn.responseCode} from $url"
-            } catch (t: Throwable) {
-                lastError = "${t.javaClass.simpleName}: ${t.message}"
             }
         }
         return "error: ${lastError ?: "unknown"}"

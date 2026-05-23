@@ -1,5 +1,5 @@
 name: xuncode
-description: XunCode — Mobile code editor for Android with Monaco, GitHub-based plugins, proot terminal
+description: XunCode — мощный редактор кода для Android. Не открытый исходный код. Форки запрещены. Подробнее в LICENSE.
 publish_to: 'none'
 version: 1.0.0+1
 

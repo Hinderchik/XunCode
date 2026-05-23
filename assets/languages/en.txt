@@ -18,6 +18,25 @@ common.uninstall=Uninstall
 common.search=Search
 common.loading=Loading…
 
+# Short aliases (kept for plugin / legacy compatibility)
+theme=Theme
+dark=Dark
+light=Light
+system=System
+editor=Editor
+font_size=Font size
+tab_size=Tab size
+word_wrap=Word wrap
+terminal=Terminal
+cursor_style=Cursor style
+git=Git
+user_name=User name
+user_email=User email
+about=About
+license=Licence
+language_name=English
+language_native=English
+
 # App
 app.title=XunCode
 app.no_file_open=No file open

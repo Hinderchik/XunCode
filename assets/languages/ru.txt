@@ -18,6 +18,25 @@ common.uninstall=Удалить
 common.search=Поиск
 common.loading=Загрузка…
 
+# Настройки — короткие алиасы (для совместимости с плагинами и старым кодом)
+theme=Тема
+dark=Тёмная
+light=Светлая
+system=Системная
+editor=Редактор
+font_size=Размер шрифта
+tab_size=Размер табуляции
+word_wrap=Перенос строк
+terminal=Терминал
+cursor_style=Стиль курсора
+git=Git
+user_name=Имя пользователя
+user_email=Email пользователя
+about=О приложении
+license=Лицензия
+language_name=Русский
+language_native=Русский
+
 # Приложение
 app.title=XunCode
 app.no_file_open=Нет открытых файлов

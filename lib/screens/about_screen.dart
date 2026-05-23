@@ -69,7 +69,9 @@ class AboutScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             child: Text(
-              'Released under the MIT License. © 2025 Hinderchik.',
+              'Proprietary licence (NOT open source). Forks, modification and '
+              'redistribution are prohibited. See LICENSE in the repository '
+              'root for the full terms. © 2026 XunKal1 (Hinderchik).',
               style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 12),
             ),
           ),
@@ -97,7 +99,7 @@ class AboutScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('VScode Mobile',
+                Text('XunCode',
                   style: TextStyle(color: VscodeTheme.fg, fontSize: 18, fontWeight: FontWeight.w600)),
                 SizedBox(height: 4),
                 Text('Mobile code editor for Android',

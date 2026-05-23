@@ -25,19 +25,29 @@ JNI_LIBS="$PROJECT_ROOT/android/app/src/main/jniLibs"
 PROOT_VERSION="${PROOT_VERSION:-5.4.0}"
 STRICT="${STRICT:-0}"
 
-# Mirrors of the proot static binary. proot-me/proot-static-build is the
-# upstream's own GitHub release; the latest tag is a moving alias for the
-# most recent build. Both are tried in order.
+# Mirrors of the proot static binary. We try several upstreams in order:
+#   1. termux/proot — Termux-maintained static builds (most reliable for arm).
+#   2. proot-me/proot-static-build — original upstream's GitHub releases.
+#   3. proot-me/proot-static-build/latest — moving alias for the most recent build.
 declare -a MIRRORS=(
+  "https://github.com/termux/proot/releases/download/v5.3.0"
   "https://github.com/proot-me/proot-static-build/releases/download/v${PROOT_VERSION}"
   "https://github.com/proot-me/proot-static-build/releases/latest/download"
 )
 
+# termux/proot uses different filenames than proot-static-build, so each ABI has
+# a primary file plus a list of aliases the loop will try in turn.
 declare -A ABI_TO_FILE=(
   ["arm64-v8a"]="proot-aarch64"
   ["armeabi-v7a"]="proot-armv7a"
   ["x86_64"]="proot-x86_64"
   ["x86"]="proot-x86"
+)
+declare -A ABI_TO_ALIAS=(
+  ["arm64-v8a"]="proot-aarch64 proot-arm64"
+  ["armeabi-v7a"]="proot-armv7a proot-arm"
+  ["x86_64"]="proot-x86_64"
+  ["x86"]="proot-x86 proot-i686"
 )
 
 if [[ "${1:-}" == "--check" ]]; then
@@ -80,20 +90,24 @@ for abi in "${!ABI_TO_FILE[@]}"; do
   fi
 
   ok=0
+  # Try every mirror × every alias filename until something sticks.
+  aliases="${ABI_TO_ALIAS[$abi]:-$bin_name}"
   for base in "${MIRRORS[@]}"; do
-    if download "$base/$bin_name" "$out_file" 2>/dev/null; then
-      # Sanity check: a real proot binary is several hundred KB.
-      sz=$(wc -c < "$out_file" 2>/dev/null || echo 0)
-      if [[ $sz -lt 1024 ]]; then
-        echo "  ⚠ downloaded file too small ($sz bytes), trying next mirror"
-        rm -f "$out_file"
-        continue
+    [[ $ok -eq 1 ]] && break
+    for alias_name in $aliases; do
+      if download "$base/$alias_name" "$out_file" 2>/dev/null; then
+        sz=$(wc -c < "$out_file" 2>/dev/null || echo 0)
+        if [[ $sz -lt 1024 ]]; then
+          echo "  ⚠ downloaded file too small ($sz bytes), trying next"
+          rm -f "$out_file"
+          continue
+        fi
+        chmod +x "$out_file" || true
+        ok=1
+        break
       fi
-      chmod +x "$out_file" || true
-      ok=1
-      break
-    fi
-    rm -f "$out_file"
+      rm -f "$out_file"
+    done
   done
 
   if [[ $ok -eq 0 ]]; then
