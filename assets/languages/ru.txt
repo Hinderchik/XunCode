@@ -1,7 +1,7 @@
 # XunCode UI строки — русский
 # Формат: ключ=значение. Строки, начинающиеся с #, и пустые игнорируются.
 # Последовательность "\n" в значении превращается в перенос строки.
-_meta.name=Русский
+_meta.name=Russia
 _meta.code=ru
 
 # Общее
@@ -80,6 +80,8 @@ terminal.type_command=Введите команду…
 terminal.clear_cache=Очистить кэш терминала
 terminal.clear_cache_subtitle=Удаляет распакованный Alpine. При следующем запуске терминала он будет скачан заново.
 terminal.clear_cache_done=Кэш терминала очищен
+terminal.cancel=Отмена
+terminal.cancelled=Скачивание отменено
 
 # Заголовок настроек
 settings.title=Настройки

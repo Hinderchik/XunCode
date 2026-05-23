@@ -80,6 +80,8 @@ terminal.type_command=Type a command…
 terminal.clear_cache=Clear terminal cache
 terminal.clear_cache_subtitle=Removes the unpacked Alpine rootfs. Next terminal launch will re-download it.
 terminal.clear_cache_done=Terminal cache cleared
+terminal.cancel=Cancel
+terminal.cancelled=Download cancelled
 
 # Settings header
 settings.title=Settings

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
@@ -25,6 +26,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   String _installStage = '';
   double _installProgress = 0;
   String? _installError;
+  CancelToken? _cancelToken;
 
   @override
   void initState() {
@@ -36,10 +38,14 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   Future<void> _bootstrap() async {
     final hasProot = await TerminalBridge.prootExists();
     if (!hasProot) {
-      // Try to download. Don't auto-fallback to /system/bin/sh — surface the
-      // failure with explicit Retry / Use limited shell buttons instead.
-      final ok = await _downloadProot();
-      if (!ok) return; // _installError is set; UI shows the error panel
+      // proot должен быть в APK (jniLibs/arm64-v8a/libproot.so). Если его нет —
+      // APK битый: предлагаем limited shell.
+      if (mounted) {
+        setState(() {
+          _installError = 'proot binary missing from APK';
+        });
+      }
+      return;
     }
     final installed = await TerminalBridge.isAlpineInstalled();
     if (!installed) {
@@ -49,45 +55,46 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
     await _newTab();
   }
 
-  Future<bool> _downloadProot() async {
-    setState(() {
-      _installing = true;
-      _installStage = 'Downloading proot';
-      _installProgress = 0;
-      _installError = null;
-    });
-    final r = await TerminalBridge.downloadProot();
-    if (!mounted) return false;
-    setState(() => _installing = false);
-    if (r != 'ok') {
-      setState(() {
-        _installError = 'proot download failed: ${r.replaceFirst('error: ', '')}';
-      });
-      return false;
-    }
-    return true;
-  }
-
   Future<void> _installAlpine() async {
+    final cancelToken = CancelToken();
     setState(() {
       _installing = true;
       _installStage = 'Preparing';
       _installProgress = 0;
       _installError = null;
+      _cancelToken = cancelToken;
     });
     try {
-      await TerminalBridge.installAlpine(onProgress: (p, stage) {
-        if (!mounted) return;
-        setState(() {
-          _installProgress = p;
-          _installStage = stage;
-        });
-      });
+      await TerminalBridge.installAlpine(
+        cancelToken: cancelToken,
+        onProgress: (p, stage) {
+          if (!mounted) return;
+          setState(() {
+            _installProgress = p;
+            _installStage = stage;
+          });
+        },
+      );
     } catch (e) {
-      if (mounted) setState(() => _installError = 'Install failed: $e');
+      if (!mounted) return;
+      if (cancelToken.isCancelled) {
+        final lang = LanguageService.of(context);
+        setState(() => _installError = lang.tr('terminal.cancelled'));
+      } else {
+        setState(() => _installError = 'Install failed: $e');
+      }
     } finally {
-      if (mounted) setState(() => _installing = false);
+      if (mounted) {
+        setState(() {
+          _installing = false;
+          _cancelToken = null;
+        });
+      }
     }
+  }
+
+  void _cancelInstall() {
+    _cancelToken?.cancel('user cancelled');
   }
 
   Future<void> _newTab() async {
@@ -245,6 +252,14 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
           const SizedBox(height: 6),
           Text(lang.tr('terminal.alpine_size'),
             style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+          const SizedBox(height: 10),
+          if (_cancelToken != null)
+            TextButton.icon(
+              icon: const Icon(Icons.cancel, size: 14),
+              label: Text(lang.tr('terminal.cancel')),
+              style: TextButton.styleFrom(foregroundColor: VscodeTheme.fgMuted),
+              onPressed: _cancelInstall,
+            ),
         ],
       ),
     );
@@ -275,7 +290,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
             children: [
               ElevatedButton.icon(
                 icon: const Icon(Icons.refresh, size: 14),
-                label: Text(lang.tr('terminal.retry_proot')),
+                label: Text(lang.tr('common.retry')),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: VscodeTheme.accent,
                   foregroundColor: Colors.white,

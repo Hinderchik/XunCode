@@ -78,13 +78,6 @@ class TerminalBridge {
     return v ?? false;
   }
 
-  /// Asks native side to download a proot static binary into filesDir/bin/proot.
-  /// Returns 'ok' on success or an error string.
-  static Future<String> downloadProot() async {
-    final r = await _method.invokeMethod<String>('downloadProot');
-    return r ?? 'error: no response';
-  }
-
   /// Boots a /system/bin/sh session — used when proot can't be obtained.
   static Future<TerminalSession> createUnsandboxed({required String id}) async {
     final session = TerminalSession._(id, 80, 24);
@@ -106,6 +99,7 @@ class TerminalBridge {
   /// a time via TarDecoder so the whole archive never sits in memory at once.
   static Future<void> installAlpine({
     void Function(double progress, String stage)? onProgress,
+    CancelToken? cancelToken,
   }) async {
     if (await isAlpineInstalled()) return;
 
@@ -138,59 +132,87 @@ class TerminalBridge {
     await _silent(() => File(gzPath).delete());
     await _silent(() => File(tarPath).delete());
 
-    final dio = Dio();
-    await dio.download(
-      url,
-      gzPath,
-      onReceiveProgress: (received, total) {
-        if (total > 0 && onProgress != null) {
-          onProgress(received / total, 'Downloading Alpine');
-        }
-      },
-    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('rootfs_downloading', true);
 
-    onProgress?.call(0.0, 'Decompressing');
-    final input = InputFileStream(gzPath);
-    final output = OutputFileStream(tarPath);
-    try {
-      GZipDecoder().decodeStream(input, output);
-    } finally {
-      await input.close();
-      await output.close();
+    Future<void> cleanupPartial() async {
+      await _silent(() => File(gzPath).delete());
+      await _silent(() => File(tarPath).delete());
+      try {
+        if (await rootDir.exists()) {
+          await rootDir.delete(recursive: true);
+        }
+      } catch (_) {}
+      await prefs.setBool('rootfs_downloading', false);
+      await prefs.setBool('alpine.installed', false);
     }
 
-    onProgress?.call(0.0, 'Extracting');
-    final tarStream = InputFileStream(tarPath);
     try {
-      final archive = TarDecoder().decodeBuffer(tarStream);
-      final total = archive.length;
-      var done = 0;
-      for (final entry in archive) {
-        final outPath = '$root/${entry.name}';
-        if (entry.isFile) {
-          final f = File(outPath);
-          await f.parent.create(recursive: true);
-          await f.writeAsBytes(entry.content as List<int>, flush: false);
-        } else {
-          await Directory(outPath).create(recursive: true);
-        }
-        done++;
-        if (done % 200 == 0) {
-          onProgress?.call(done / total, 'Extracting');
-        }
+      final dio = Dio();
+      await dio.download(
+        url,
+        gzPath,
+        cancelToken: cancelToken,
+        onReceiveProgress: (received, total) {
+          if (total > 0 && onProgress != null) {
+            onProgress(received / total, 'Downloading Alpine');
+          }
+        },
+      );
+
+      onProgress?.call(0.0, 'Decompressing');
+      final input = InputFileStream(gzPath);
+      final output = OutputFileStream(tarPath);
+      try {
+        GZipDecoder().decodeStream(input, output);
+      } finally {
+        await input.close();
+        await output.close();
       }
-      onProgress?.call(1.0, 'Extracting');
-    } finally {
-      await tarStream.close();
+
+      onProgress?.call(0.0, 'Extracting');
+      final tarStream = InputFileStream(tarPath);
+      try {
+        final archive = TarDecoder().decodeBuffer(tarStream);
+        final total = archive.length;
+        var done = 0;
+        for (final entry in archive) {
+          if (cancelToken?.isCancelled ?? false) {
+            throw DioException.requestCancelled(
+              requestOptions: RequestOptions(path: url),
+              reason: 'cancelled during extraction',
+            );
+          }
+          final outPath = '$root/${entry.name}';
+          if (entry.isFile) {
+            final f = File(outPath);
+            await f.parent.create(recursive: true);
+            await f.writeAsBytes(entry.content as List<int>, flush: false);
+          } else {
+            await Directory(outPath).create(recursive: true);
+          }
+          done++;
+          if (done % 200 == 0) {
+            onProgress?.call(done / total, 'Extracting');
+          }
+        }
+        onProgress?.call(1.0, 'Extracting');
+      } finally {
+        await tarStream.close();
+      }
+
+      final resolv = File('$root/etc/resolv.conf');
+      await resolv.parent.create(recursive: true);
+      await resolv.writeAsString('nameserver 1.1.1.1\nnameserver 8.8.8.8\n');
+
+      await _silent(() => File(gzPath).delete());
+      await _silent(() => File(tarPath).delete());
+      await prefs.setBool('rootfs_downloading', false);
+      await markAlpineInstalled();
+    } catch (e) {
+      await cleanupPartial();
+      rethrow;
     }
-
-    final resolv = File('$root/etc/resolv.conf');
-    await resolv.parent.create(recursive: true);
-    await resolv.writeAsString('nameserver 1.1.1.1\nnameserver 8.8.8.8\n');
-
-    await _silent(() => File(gzPath).delete());
-    await _silent(() => File(tarPath).delete());
-    await markAlpineInstalled();
   }
 
   static Future<void> _silent(Future<Object?> Function() block) async {
