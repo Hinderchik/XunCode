@@ -51,8 +51,15 @@ jobs:
       - name: Install npm deps and bundle Monaco Editor
         run: npm install && npm run build:monaco
 
-      - name: Fetch proot binaries for all ABIs
-        run: bash scripts/fetch-proot.sh
+      - name: Verify proot binary exists
+        run: |
+          if [ ! -f "android/app/src/main/jniLibs/arm64-v8a/libproot.so" ]; then
+            echo "Error: libproot.so not found in jniLibs"
+            echo "Please ensure the binary is committed to the repository"
+            exit 1
+          fi
+          chmod +x android/app/src/main/jniLibs/arm64-v8a/libproot.so
+          echo "proot binary found and ready"
 
       - name: Install Flutter dependencies
         run: flutter pub get
