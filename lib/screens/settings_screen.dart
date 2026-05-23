@@ -267,6 +267,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _section(lang.tr('settings.section.about')),
           _info(lang.tr('settings.about.version'), '1.0.0'),
           _info(lang.tr('settings.about.platform'), lang.tr('settings.about.platform_value')),
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.favorite, color: Colors.redAccent, size: 18),
+            title: Text(lang.tr('support.author'),
+                style: const TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: Text(lang.tr('support.subtitle'),
+                style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            trailing: const Icon(Icons.open_in_new, size: 14, color: Colors.redAccent),
+            onTap: () async {
+              final uri = Uri.parse('https://www.donationalerts.com/r/wenerking');
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
           _link(context, 'GitHub: @Hinderchik', 'https://github.com/Hinderchik'),
           _link(context, 'Dev channel: t.me/XunKal1Dev', 'https://t.me/XunKal1Dev'),
           _link(context, 'Community: t.me/GodPassTGK', 'https://t.me/GodPassTGK'),

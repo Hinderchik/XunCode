@@ -8,6 +8,8 @@ class AboutScreen extends StatelessWidget {
   static const _appVersion = '1.0.0';
   static const _appBuild = '1';
 
+  static const _donationUrl = 'https://www.donationalerts.com/r/wenerking';
+
   static const _links = [
     _LinkRef(
       icon: Icons.code,
@@ -55,6 +57,17 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 24),
           _section('AUTHOR & COMMUNITY'),
           ..._links.map(_buildLinkTile),
+          ListTile(
+            tileColor: VscodeTheme.bgSidebar,
+            dense: true,
+            leading: const Icon(Icons.favorite, color: Colors.redAccent, size: 18),
+            title: const Text('Support author',
+                style: TextStyle(color: VscodeTheme.fg, fontSize: 13)),
+            subtitle: const Text('Buy the developer a coffee',
+                style: TextStyle(color: VscodeTheme.fgMuted, fontSize: 11)),
+            trailing: const Icon(Icons.open_in_new, size: 14, color: Colors.redAccent),
+            onTap: () => _open(_donationUrl),
+          ),
           const SizedBox(height: 16),
           _section('VERSION'),
           _infoTile('Version', _appVersion),

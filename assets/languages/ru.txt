@@ -163,6 +163,16 @@ errors.proot_download_failed=Не удалось скачать proot: {error}
 # Уведомления
 notify.installed={name} установлен
 
+# Поддержка автора
+support.author=Поддержать автора
+support.subtitle=Купить кофе разработчику
+support.donate=Открыть DonationAlerts
+
+# Короткие алиасы (для обратной совместимости с плагинами)
+support_author=Поддержать автора
+support_subtitle=Купить кофе разработчику
+support_donate=Открыть DonationAlerts
+
 # Языки программирования
 languages.title=Языки программирования
 languages.subtitle=Установка сред и библиотек с официальных источников или своим ссылкам

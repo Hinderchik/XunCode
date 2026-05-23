@@ -163,6 +163,16 @@ errors.proot_download_failed=proot download failed: {error}
 # Notifications
 notify.installed={name} installed
 
+# Support the author
+support.author=Support author
+support.subtitle=Buy the developer a coffee
+support.donate=Open DonationAlerts
+
+# Short aliases (kept for plugin / legacy compatibility)
+support_author=Support author
+support_subtitle=Buy the developer a coffee
+support_donate=Open DonationAlerts
+
 # Programming languages
 languages.title=Programming languages
 languages.subtitle=Install runtimes and libraries from official sources or your own URLs

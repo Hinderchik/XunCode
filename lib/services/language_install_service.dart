@@ -137,8 +137,17 @@ class LanguageInstallService extends ChangeNotifier {
 
     onProgress?.call(0, 'Extracting');
     try {
-      await _extract(archivePath, dir.path,
-          onProgress: (p) => onProgress?.call(p, 'Extracting'));
+      // Распаковка — самая дорогая операция (CPU + IO). Гоним её через
+      // compute() в отдельном изоляте, чтобы UI-поток оставался свободным.
+      // Таймаут 120 секунд: типичный JDK/Node tarball на ARM64 ставится
+      // за 30–60 с, всё, что дольше — почти наверняка зависший процесс.
+      await compute(_extractInIsolate, <String, String>{
+        'archivePath': archivePath,
+        'outDir': dir.path,
+        'tmpDir': FileService.tmpDir,
+      }).timeout(const Duration(seconds: 120),
+          onTimeout: () => throw 'Extraction timed out (>120s)');
+      onProgress?.call(1.0, 'Extracting');
     } catch (e) {
       await _silent(() => dir.delete(recursive: true));
       throw 'Extraction failed: $e';
@@ -186,93 +195,6 @@ class LanguageInstallService extends ChangeNotifier {
 
   // ── Helpers ──────────────────────────────────────────────────────────
 
-  Future<void> _extract(String archivePath, String outDir,
-      {void Function(double)? onProgress}) async {
-    final lower = archivePath.toLowerCase();
-    final input = InputFileStream(archivePath);
-    try {
-      Archive archive;
-      if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz') ||
-          lower.endsWith('.archive') /* unknown ext, try gzip */) {
-        // Сначала пробуем gzip + tar (чаще всего).
-        final tarPath = '${FileService.tmpDir}/${_basename(archivePath)}.tar';
-        try {
-          final out = OutputFileStream(tarPath);
-          try {
-            GZipDecoder().decodeStream(input, out);
-          } finally {
-            await out.close();
-          }
-          final tarStream = InputFileStream(tarPath);
-          try {
-            archive = TarDecoder().decodeBuffer(tarStream);
-            await _writeArchive(archive, outDir, onProgress);
-          } finally {
-            await tarStream.close();
-          }
-          await _silent(() => File(tarPath).delete());
-          return;
-        } catch (_) {
-          await _silent(() => File(tarPath).delete());
-          // Не gzip — попробуем дальше.
-        }
-      }
-      // Закрываем и переоткрываем поток для повторных попыток.
-      await input.close();
-      final input2 = InputFileStream(archivePath);
-      try {
-        if (lower.endsWith('.tar.xz') || lower.endsWith('.txz')) {
-          // XZDecoder в текущей версии archive не имеет decodeStream;
-          // читаем архив целиком в память и распаковываем побайтово.
-          await input2.close();
-          final bytes = await File(archivePath).readAsBytes();
-          final decodedBytes = XZDecoder().decodeBytes(bytes);
-          archive = TarDecoder().decodeBytes(decodedBytes);
-          await _writeArchive(archive, outDir, onProgress);
-          return;
-        }
-        if (lower.endsWith('.tar')) {
-          archive = TarDecoder().decodeBuffer(input2);
-          await _writeArchive(archive, outDir, onProgress);
-          return;
-        }
-        if (lower.endsWith('.zip') || lower.endsWith('.archive')) {
-          archive = ZipDecoder().decodeBuffer(input2);
-          await _writeArchive(archive, outDir, onProgress);
-          return;
-        }
-        throw 'Unsupported archive format: $archivePath';
-      } finally {
-        await _silent(() => input2.close());
-      }
-    } finally {
-      await _silent(() => input.close());
-    }
-  }
-
-  Future<void> _writeArchive(Archive archive, String outDir,
-      void Function(double)? onProgress) async {
-    final total = archive.length;
-    var done = 0;
-    for (final entry in archive) {
-      final outPath = '$outDir/${entry.name}';
-      if (entry.isFile) {
-        final f = File(outPath);
-        await f.parent.create(recursive: true);
-        await f.writeAsBytes(entry.content as List<int>, flush: false);
-      } else {
-        await Directory(outPath).create(recursive: true);
-      }
-      done++;
-      if (onProgress != null && total > 0 && done % 100 == 0) {
-        onProgress(done / total);
-      }
-    }
-    onProgress?.call(1.0);
-  }
-
-  String _basename(String p) => p.split(Platform.pathSeparator).last;
-
   Future<void> _silent(Future<Object?> Function() block) async {
     try {
       await block();
@@ -286,3 +208,81 @@ class LanguageInstallService extends ChangeNotifier {
     _loaded = false;
   }
 }
+
+/// Точка входа для compute(). Выполняется в отдельном изоляте, поэтому не
+/// имеет доступа ни к UI, ни к статикам Flutter — только чистая работа с
+/// файлами. Возвращает `'ok'` или бросает исключение со строковым описанием.
+String _extractInIsolate(Map<String, String> args) {
+  final archivePath = args['archivePath']!;
+  final outDir = args['outDir']!;
+  final tmpDir = args['tmpDir']!;
+  final lower = archivePath.toLowerCase();
+
+  Archive archive;
+  if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz') ||
+      lower.endsWith('.archive')) {
+    final input = InputFileStream(archivePath);
+    final tarPath = '$tmpDir/${_basenameOf(archivePath)}.tar';
+    try {
+      final out = OutputFileStream(tarPath);
+      try {
+        GZipDecoder().decodeStream(input, out);
+      } finally {
+        out.closeSync();
+      }
+      final tarStream = InputFileStream(tarPath);
+      try {
+        archive = TarDecoder().decodeBuffer(tarStream);
+        _writeArchiveSync(archive, outDir);
+      } finally {
+        tarStream.closeSync();
+      }
+      try { File(tarPath).deleteSync(); } catch (_) {}
+      return 'ok';
+    } catch (_) {
+      try { File(tarPath).deleteSync(); } catch (_) {}
+      // Не gzip — пробуем дальше.
+    } finally {
+      input.closeSync();
+    }
+  }
+  if (lower.endsWith('.tar.xz') || lower.endsWith('.txz')) {
+    // archive 3.6.x: XZDecoder работает только с byte-buffers.
+    final bytes = File(archivePath).readAsBytesSync();
+    final decodedBytes = XZDecoder().decodeBytes(bytes);
+    archive = TarDecoder().decodeBytes(decodedBytes);
+    _writeArchiveSync(archive, outDir);
+    return 'ok';
+  }
+  final input = InputFileStream(archivePath);
+  try {
+    if (lower.endsWith('.tar')) {
+      archive = TarDecoder().decodeBuffer(input);
+      _writeArchiveSync(archive, outDir);
+      return 'ok';
+    }
+    if (lower.endsWith('.zip') || lower.endsWith('.archive')) {
+      archive = ZipDecoder().decodeBuffer(input);
+      _writeArchiveSync(archive, outDir);
+      return 'ok';
+    }
+    throw 'Unsupported archive format: $archivePath';
+  } finally {
+    input.closeSync();
+  }
+}
+
+void _writeArchiveSync(Archive archive, String outDir) {
+  for (final entry in archive) {
+    final outPath = '$outDir/${entry.name}';
+    if (entry.isFile) {
+      final f = File(outPath);
+      f.parent.createSync(recursive: true);
+      f.writeAsBytesSync(entry.content as List<int>, flush: false);
+    } else {
+      Directory(outPath).createSync(recursive: true);
+    }
+  }
+}
+
+String _basenameOf(String p) => p.split(Platform.pathSeparator).last;
