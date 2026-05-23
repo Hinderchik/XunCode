@@ -1,6 +1,6 @@
 # XunCode for Android
 
-[![Build APK](https://github.com/Hinderchik/XunCode/actions/workflows/build.yml/badge.svg)](https://github.com/Hinderchik/XunCode/actions/workflows/build.yml)
+[![Build APK](https://img.shields.io/badge/Build%20APK-passing-brightgreen)](https://github.com/Hinderchik/XunCode/actions/workflows/build.yml)
 
 > **Лицензия / Licence:** проприетарная — форки, модификация и распространение **запрещены**. Подробнее в [LICENSE](LICENSE).
 > Proprietary — forks, modification and redistribution are **prohibited**. See [LICENSE](LICENSE) for the full terms.
@@ -46,6 +46,7 @@ flutter build apk --debug
 - GitHub: [@Hinderchik](https://github.com/Hinderchik)
 - Dev-канал: [t.me/XunKal1Dev](https://t.me/XunKal1Dev)
 - Сообщество: [t.me/GodPassTGK](https://t.me/GodPassTGK)
+- Личка: [t.me/Skuuuchn](https://t.me/Skuuuchn)
 
 ---
 
@@ -88,3 +89,4 @@ flutter build apk --debug
 - GitHub: [@Hinderchik](https://github.com/Hinderchik)
 - Dev channel: [t.me/XunKal1Dev](https://t.me/XunKal1Dev)
 - Community: [t.me/GodPassTGK](https://t.me/GodPassTGK)
+- DM: [t.me/Skuuuchn](https://t.me/Skuuuchn)
