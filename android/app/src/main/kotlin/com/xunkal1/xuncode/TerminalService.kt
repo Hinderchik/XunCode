@@ -48,19 +48,8 @@ class TerminalService(private val appContext: Context) {
         return d
     }
 
-    fun prootBinary(): File {
-        // 1. Сначала ищем встроенный proot из jniLibs (nativeLibraryDir)
-        val native = File(appContext.applicationInfo.nativeLibraryDir, "libproot.so")
-        if (native.exists() && native.length() > 0) return native
-        // 2. Fallback: скачанный в filesDir
-        return File(appContext.filesDir, "proot/proot")
-    }
-
-    fun chmodProot(): Boolean {
-        val f = prootBinary()
-        if (!f.exists()) return false
-        return f.setExecutable(true, false)
-    }
+    fun prootBinary(): File =
+        File(appContext.applicationInfo.nativeLibraryDir, "libproot.so")
 
     fun create(id: String, cols: Int, rows: Int, sink: EventChannel.EventSink): String {
         kill(id)
@@ -148,40 +137,20 @@ class TerminalSession(
 
         return try {
             val shared = service.sharedDir().absolutePath
-            val prootPath = proot.absolutePath
-            val rootfsPath = rootfs.absolutePath
-            val isNative = prootPath.contains("libproot.so") // из jniLibs — можно напрямую
 
-            val pb = if (isNative) {
-                // proot встроен в APK через jniLibs — Android даёт exec-права автоматически
-                ProcessBuilder(
-                    prootPath,
-                    "-r", rootfsPath,
-                    "-w", "/root",
-                    "-b", "/dev", "-b", "/proc", "-b", "/sys",
-                    "-b", "/dev/urandom:/dev/random",
-                    "-b", "/proc/self/fd:/dev/fd",
-                    "-b", "$shared:/sdcard/XunCode",
-                    "-b", "$shared:/home/user",
-                    "-0", "/bin/sh", "-l",
-                )
-            } else {
-                // proot скачан в filesDir — обёртка через sh для обхода noexec
-                ProcessBuilder(
-                    "/system/bin/sh", "-c",
-                    "chmod 755 \"$prootPath\" && " +
-                    "exec \"$prootPath\" " +
-                    "-r \"$rootfsPath\" " +
-                    "-w /root " +
-                    "-b /dev -b /proc -b /sys " +
-                    "-b /dev/urandom:/dev/random " +
-                    "-b /proc/self/fd:/dev/fd " +
-                    "-b \"$shared:/sdcard/XunCode\" " +
-                    "-b \"$shared:/home/user\" " +
-                    "-0 /bin/sh -l",
-                )
-            }
-
+            // proot запускается напрямую из nativeLibraryDir —
+            // Android автоматически даёт exec-права файлам из APK
+            val pb = ProcessBuilder(
+                proot.absolutePath,
+                "-r", rootfs.absolutePath,
+                "-w", "/root",
+                "-b", "/dev", "-b", "/proc", "-b", "/sys",
+                "-b", "/dev/urandom:/dev/random",
+                "-b", "/proc/self/fd:/dev/fd",
+                "-b", "$shared:/sdcard/XunCode",
+                "-b", "$shared:/home/user",
+                "-0", "/bin/sh", "-l",
+            )
             pb.environment().apply {
                 put("HOME", "/root")
                 put("TERM", "xterm-256color")

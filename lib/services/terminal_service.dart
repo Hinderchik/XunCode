@@ -68,32 +68,11 @@ class TerminalBridge {
     return v ?? false;
   }
 
-  /// Скачивает proot с GitHub в filesDir/proot/proot (один раз).
-  /// Запуск через /system/bin/sh -c с chmod внутри — обходит noexec.
-  static Future<void> ensureProot() async {
-    final dir = await _method.invokeMethod<String>('filesDir');
-    if (dir == null || dir.isEmpty) throw Exception('filesDir not available');
-    final prootFile = File('$dir/proot/proot');
-    if (await prootFile.exists() && await prootFile.length() > 1024) return;
-    await prootFile.parent.create(recursive: true);
-
-    const url =
-        'https://raw.githubusercontent.com/Hinderchik/XunCode/main/proot';
-    final dio = Dio();
-    await dio.download(url, prootFile.path);
-
-    if (!await prootFile.exists() || await prootFile.length() < 1024) {
-      await _silent(() => prootFile.delete());
-      throw Exception('proot download failed: file missing or too small');
-    }
-    // Делаем исполняемым через Java File API
-    await _method.invokeMethod<void>('chmodProot');
-  }
-
-  /// Скачивает proot (публичный метод для UI). Возвращает true при успехе.
-  static Future<bool> downloadProot() async {
-    await ensureProot();
-    return true;
+  /// proot встроен в APK через jniLibs — скачивание не требуется.
+  /// Проверяет наличие proot в nativeLibraryDir.
+  static Future<bool> prootExists() async {
+    final v = await _method.invokeMethod<bool>('prootBinaryExists');
+    return v ?? false;
   }
 
   /// Write data to a terminal session by ID (used by plugins).

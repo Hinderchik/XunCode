@@ -36,39 +36,13 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   }
 
   Future<void> _bootstrap() async {
-    final hasProot = await TerminalBridge.prootExists();
-    if (!hasProot) {
-      final ok = await _downloadProot();
-      if (!ok) return;
-    }
+    // proot встроен в APК через jniLibs — скачивание не требуется
     final installed = await TerminalBridge.isAlpineInstalled();
     if (!installed) {
       await _installAlpine();
       if (_installError != null) return;
     }
     await _newTab();
-  }
-
-  Future<bool> _downloadProot() async {
-    setState(() {
-      _installing = true;
-      _installStage = 'Downloading proot';
-      _installProgress = 0;
-      _installError = null;
-    });
-    try {
-      await TerminalBridge.downloadProot();
-      if (!mounted) return false;
-      setState(() => _installing = false);
-      return true;
-    } catch (e) {
-      if (!mounted) return false;
-      setState(() {
-        _installing = false;
-        _installError = 'proot download failed: $e';
-      });
-      return false;
-    }
   }
 
   Future<void> _installAlpine() async {
@@ -294,7 +268,7 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
             style: const TextStyle(color: VscodeTheme.fg, fontSize: 12)),
           const SizedBox(height: 4),
           Text(
-            lang.tr('terminal.proot_help'),
+            'Alpine Linux rootfs is required for the terminal. It will be downloaded once (~3 MB).',
             textAlign: TextAlign.center,
             style: const TextStyle(color: VscodeTheme.fgMuted, fontSize: 11),
           ),
