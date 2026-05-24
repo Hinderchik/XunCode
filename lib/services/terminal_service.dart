@@ -1,16 +1,47 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'file_service.dart';
 
+/// AXS (Acode eXecution Server) — обходит noexec на Android 13+ через memfd_create.
+/// AXS запускается как отдельный процесс и выполняет команды внутри proot-песочницы.
+///
+/// Бинарник AXS лежит в assets/axs/axs, при первом запуске копируется в filesDir/axs/axs.
+/// proot-библиотеки (libproot.so, libtalloc.so и др.) встроены в APK через jniLibs.
 class TerminalBridge {
   static const _method = MethodChannel('com.xunkal1.xuncode/terminal');
   static const _events = EventChannel('com.xunkal1.xuncode/terminal/events');
+
+  // ── AXS binary management ──────────────────────────────────────────
+
+  static Future<File> _axsBinary() async {
+    final dir = await getApplicationSupportDirectory();
+    final axsDir = Directory('${dir.path}/axs');
+    final axsFile = File('${axsDir.path}/axs');
+    if (await axsFile.exists()) return axsFile;
+
+    // Копируем из assets при первом запуске
+    await axsDir.create(recursive: true);
+    final byteData = await rootBundle.load('assets/axs/axs');
+    await axsFile.writeAsBytes(byteData.buffer.asUint8List());
+    // chmod 755
+    await Process.run('chmod', ['755', axsFile.path]);
+    return axsFile;
+  }
+
+  /// Путь к rootfs Alpine
+  static Future<String> rootfsPath() async {
+    return await _method.invokeMethod<String>('rootfsPath') ?? '';
+  }
+
+  // ── Alpine rootfs ───────────────────────────────────────────────────
 
   static Future<bool> isAlpineInstalled() async {
     final prefs = await SharedPreferences.getInstance();
@@ -59,44 +90,13 @@ class TerminalBridge {
     } catch (_) {}
   }
 
-  static Future<String> rootfsPath() async {
-    return await _method.invokeMethod<String>('rootfsPath') ?? '';
-  }
-
-  static Future<bool> prootExists() async {
-    final v = await _method.invokeMethod<bool>('prootBinaryExists');
-    return v ?? false;
-  }
-
-  /// proot встроен в APK через jniLibs — скачивание не требуется.
-  /// Проверяет наличие proot в nativeLibraryDir.
-  static Future<bool> prootExists() async {
-    final v = await _method.invokeMethod<bool>('prootBinaryExists');
-    return v ?? false;
-  }
-
-  /// Write data to a terminal session by ID (used by plugins).
-  static Future<void> write({required String id, required String data}) async {
-    await _method.invokeMethod('write', {'id': id, 'data': data});
-  }
-
-  /// Kill a terminal session by ID (used by plugins).
-  static Future<void> kill({required String id}) async {
-    await _method.invokeMethod('kill', {'id': id});
-  }
-
-  static Future<TerminalSession> createUnsandboxed({required String id}) async {
-    final session = TerminalSession._(id, 80, 24);
-    await session._openUnsandboxed();
-    return session;
-  }
-
   static Future<void> markAlpineInstalled() async {
     await _method.invokeMethod('markAlpineInstalled');
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('alpine.installed', true);
   }
 
+  /// Скачивает Alpine minirootfs при первом запуске (с прогрессом и cancel)
   static Future<void> installAlpine({
     void Function(double progress, String stage)? onProgress,
     CancelToken? cancelToken,
@@ -211,6 +211,36 @@ class TerminalBridge {
     }
   }
 
+  // ── Terminal sessions via AXS ──────────────────────────────────────
+
+  static Future<TerminalSession> create({
+    required String id,
+    int cols = 80,
+    int rows = 24,
+  }) async {
+    final session = TerminalSession._(id, cols, rows);
+    await session._open();
+    return session;
+  }
+
+  static Future<TerminalSession> createUnsandboxed({required String id}) async {
+    final session = TerminalSession._(id, 80, 24);
+    await session._openUnsandboxed();
+    return session;
+  }
+
+  /// Write data to a terminal session by ID (used by plugins).
+  static Future<void> write({required String id, required String data}) async {
+    await _method.invokeMethod('write', {'id': id, 'data': data});
+  }
+
+  /// Kill a terminal session by ID (used by plugins).
+  static Future<void> kill({required String id}) async {
+    await _method.invokeMethod('kill', {'id': id});
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────
+
   static Future<void> _silent(Future<Object?> Function() block) async {
     try { await block(); } catch (_) {}
   }
@@ -218,16 +248,11 @@ class TerminalBridge {
   static String _alpineArch() {
     final abi = _abi();
     switch (abi) {
-      case 'arm64-v8a':
-        return 'aarch64';
-      case 'armeabi-v7a':
-        return 'armv7';
-      case 'x86_64':
-        return 'x86_64';
-      case 'x86':
-        return 'x86';
-      default:
-        return 'aarch64';
+      case 'arm64-v8a': return 'aarch64';
+      case 'armeabi-v7a': return 'armv7';
+      case 'x86_64': return 'x86_64';
+      case 'x86': return 'x86';
+      default: return 'aarch64';
     }
   }
 
@@ -238,16 +263,6 @@ class TerminalBridge {
     if (v.contains('x86_64') || v.contains('amd64')) return 'x86_64';
     if (v.contains('i686') || v.contains('x86')) return 'x86';
     return 'arm64-v8a';
-  }
-
-  static Future<TerminalSession> create({
-    required String id,
-    int cols = 80,
-    int rows = 24,
-  }) async {
-    final session = TerminalSession._(id, cols, rows);
-    await session._open();
-    return session;
   }
 }
 

@@ -33,7 +33,6 @@ Android 8.0+ (API 26).
 git clone https://github.com/Hinderchik/XunCode.git
 cd XunCode
 npm install && npm run build:monaco
-bash scripts/fetch-proot.sh
 flutter pub get
 flutter pub run flutter_launcher_icons
 flutter build apk --debug
@@ -46,6 +45,18 @@ flutter build apk --debug
 - GitHub: [@Hinderchik](https://github.com/Hinderchik)
 - Dev-канал: [t.me/XunKal1Dev](https://t.me/XunKal1Dev)
 - Сообщество: [t.me/GodPassTGK](https://t.me/GodPassTGK)
+
+### Благодарности / Acknowledgments
+
+- **Acode Foundation** — за подход к обходу noexec на Android 13+ и готовые бинарники proot.
+  Репозиторий: [https://github.com/Acode-Foundation/Acode](https://github.com/Acode-Foundation/Acode)
+- **bajrangCoder** за **acodex_server (AXS)** — решение проблемы выполнения кода на Android 13+ через memfd_create.
+  Репозиторий: [https://github.com/bajrangCoder/acodex_server](https://github.com/bajrangCoder/acodex_server)
+
+### Используемые компоненты / Components
+- **PRoot** — пользовательский chroot без root: [https://github.com/proot-me/proot](https://github.com/proot-me/proot)
+- **Alpine Linux** — лёгкий Linux для терминала: [https://alpinelinux.org](https://alpinelinux.org)
+- **AXS (Acode eXecution Server)** — обход noexec через memfd_create: [https://github.com/bajrangCoder/acodex_server](https://github.com/bajrangCoder/acodex_server)
 
 ---
 
@@ -75,7 +86,6 @@ Android 8.0+ (API 26).
 git clone https://github.com/Hinderchik/XunCode.git
 cd XunCode
 npm install && npm run build:monaco
-bash scripts/fetch-proot.sh
 flutter pub get
 flutter pub run flutter_launcher_icons
 flutter build apk --debug

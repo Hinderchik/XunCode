@@ -43,6 +43,7 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
+    - assets/axs/axs
     - assets/editor.html
     - assets/plugin-docs.html
     - assets/languages/

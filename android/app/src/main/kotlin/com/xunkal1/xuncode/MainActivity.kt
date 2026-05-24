@@ -53,6 +53,9 @@ class MainActivity : FlutterActivity() {
                     val f = terminalService.prootBinary()
                     result.success(f.exists() && f.length() > 0)
                 }
+                "getNativeLibraryDir" -> {
+                    result.success(applicationInfo.nativeLibraryDir)
+                }
                 "createUnsandboxed" -> {
                     val id = call.argument<String>("id") ?: return@setMethodCallHandler result.error("ARG", "missing id", null)
                     val sink = sinks[id]
