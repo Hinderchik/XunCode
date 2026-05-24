@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'file_service.dart';
@@ -76,6 +77,42 @@ class TerminalBridge {
   static Future<bool> prootExists() async {
     final v = await _method.invokeMethod<bool>('prootBinaryExists');
     return v ?? false;
+  }
+
+  /// Путь к proot-бинарнику во внешнем filesDir.
+  static Future<String> _prootFilePath() async {
+    final dir = await getExternalStorageDirectory();
+    return '${dir!.path}/proot/proot';
+  }
+
+  /// Убеждаемся, что proot-бинарник скачан и исполняемый.
+  /// Если файл уже существует — скачивание пропускается.
+  /// Качает с GitHub (raw), сохраняет и ставит chmod 755.
+  static Future<void> ensureProot() async {
+    final prootFile = File(await _prootFilePath());
+    if (await prootFile.exists()) return;
+    await prootFile.parent.create(recursive: true);
+
+    const url =
+        'https://raw.githubusercontent.com/Hinderchik/XunCode/main/proot';
+    final dio = Dio();
+    final response = await dio.download(url, prootFile.path);
+    if (response.statusCode != 200) {
+      throw Exception('proot download failed: HTTP ${response.statusCode}');
+    }
+    if (prootFile.lengthSync() < 1024) {
+      await prootFile.delete();
+      throw Exception('proot download failed: file too small');
+    }
+    // chmod 755 — через Process.run (Dart File API не поддерживает chmod на Android)
+    await Process.run('chmod', ['755', prootFile.path]);
+  }
+
+  /// Скачивает proot-бинарник с GitHub (публичный метод для UI).
+  /// Возвращает true при успехе.
+  static Future<bool> downloadProot() async {
+    await ensureProot();
+    return true;
   }
 
   /// Boots a /system/bin/sh session — used when proot can't be obtained.

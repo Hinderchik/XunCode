@@ -38,14 +38,8 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
   Future<void> _bootstrap() async {
     final hasProot = await TerminalBridge.prootExists();
     if (!hasProot) {
-      // proot должен быть в APK (jniLibs/arm64-v8a/libproot.so). Если его нет —
-      // APK битый: предлагаем limited shell.
-      if (mounted) {
-        setState(() {
-          _installError = 'proot binary missing from APK';
-        });
-      }
-      return;
+      final ok = await _downloadProot();
+      if (!ok) return;
     }
     final installed = await TerminalBridge.isAlpineInstalled();
     if (!installed) {
@@ -53,6 +47,28 @@ class _TerminalPanelState extends State<TerminalPanel> with TickerProviderStateM
       if (_installError != null) return;
     }
     await _newTab();
+  }
+
+  Future<bool> _downloadProot() async {
+    setState(() {
+      _installing = true;
+      _installStage = 'Downloading proot';
+      _installProgress = 0;
+      _installError = null;
+    });
+    try {
+      await TerminalBridge.downloadProot();
+      if (!mounted) return false;
+      setState(() => _installing = false);
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      setState(() {
+        _installing = false;
+        _installError = 'proot download failed: $e';
+      });
+      return false;
+    }
   }
 
   Future<void> _installAlpine() async {

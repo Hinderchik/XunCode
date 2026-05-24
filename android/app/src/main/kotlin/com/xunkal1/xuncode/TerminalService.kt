@@ -60,7 +60,7 @@ class TerminalService(private val appContext: Context) {
     }
 
     fun prootBinary(): File =
-        File(appContext.applicationInfo.nativeLibraryDir, "libproot.so")
+        File(appDataDir(), "proot/proot")
 
     fun create(id: String, cols: Int, rows: Int, sink: EventChannel.EventSink): String {
         kill(id)
