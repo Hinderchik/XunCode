@@ -421,7 +421,9 @@ class PluginSandbox {
   }
 
   Future<bool> _fsExists(String path) async {
-    return await File(path).exists() || await Directory(path).exists();
+    if (await File(path).exists()) return true;
+    if (await Directory(path).exists()) return true;
+    return false;
   }
 
   Future<List<Map<String, Object>>> _fsListDir(String path) async {

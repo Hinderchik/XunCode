@@ -14,7 +14,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Bootstrap storage layout before anything tries to read it.
   await FileService.ensureLayout();
-  final settings = SettingsService();
+  final settings = SettingsService.instance;
   await settings.init();
   final language = LanguageService(settings);
   await language.init();

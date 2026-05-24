@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsService {
   SettingsService._();
   static final SettingsService instance = SettingsService._();
-  SettingsService();
+  // singleton factory removed - use SettingsService.instance
 
   late SharedPreferences _prefs;
 
