@@ -48,8 +48,13 @@ class TerminalService(private val appContext: Context) {
         return d
     }
 
-    fun prootBinary(): File =
-        File(appContext.filesDir, "proot/proot")
+    fun prootBinary(): File {
+        // 1. Сначала ищем встроенный proot из jniLibs (nativeLibraryDir)
+        val native = File(appContext.applicationInfo.nativeLibraryDir, "libproot.so")
+        if (native.exists() && native.length() > 0) return native
+        // 2. Fallback: скачанный в filesDir
+        return File(appContext.filesDir, "proot/proot")
+    }
 
     fun chmodProot(): Boolean {
         val f = prootBinary()
@@ -141,26 +146,42 @@ class TerminalSession(
             return emit("[terminal] Alpine rootfs not installed yet — install first")
         }
 
-        // Запускаем через /system/bin/sh -c с chmod внутри — обходит noexec
-        // на /data/data/<pkg>/files/. sh выполняет chmod 755 и exec proot.
         return try {
             val shared = service.sharedDir().absolutePath
             val prootPath = proot.absolutePath
             val rootfsPath = rootfs.absolutePath
+            val isNative = prootPath.contains("libproot.so") // из jniLibs — можно напрямую
 
-            val pb = ProcessBuilder(
-                "/system/bin/sh", "-c",
-                "chmod 755 \"$prootPath\" && " +
-                "exec \"$prootPath\" " +
-                "-r \"$rootfsPath\" " +
-                "-w /root " +
-                "-b /dev -b /proc -b /sys " +
-                "-b /dev/urandom:/dev/random " +
-                "-b /proc/self/fd:/dev/fd " +
-                "-b \"$shared:/sdcard/XunCode\" " +
-                "-b \"$shared:/home/user\" " +
-                "-0 /bin/sh -l",
-            )
+            val pb = if (isNative) {
+                // proot встроен в APK через jniLibs — Android даёт exec-права автоматически
+                ProcessBuilder(
+                    prootPath,
+                    "-r", rootfsPath,
+                    "-w", "/root",
+                    "-b", "/dev", "-b", "/proc", "-b", "/sys",
+                    "-b", "/dev/urandom:/dev/random",
+                    "-b", "/proc/self/fd:/dev/fd",
+                    "-b", "$shared:/sdcard/XunCode",
+                    "-b", "$shared:/home/user",
+                    "-0", "/bin/sh", "-l",
+                )
+            } else {
+                // proot скачан в filesDir — обёртка через sh для обхода noexec
+                ProcessBuilder(
+                    "/system/bin/sh", "-c",
+                    "chmod 755 \"$prootPath\" && " +
+                    "exec \"$prootPath\" " +
+                    "-r \"$rootfsPath\" " +
+                    "-w /root " +
+                    "-b /dev -b /proc -b /sys " +
+                    "-b /dev/urandom:/dev/random " +
+                    "-b /proc/self/fd:/dev/fd " +
+                    "-b \"$shared:/sdcard/XunCode\" " +
+                    "-b \"$shared:/home/user\" " +
+                    "-0 /bin/sh -l",
+                )
+            }
+
             pb.environment().apply {
                 put("HOME", "/root")
                 put("TERM", "xterm-256color")
