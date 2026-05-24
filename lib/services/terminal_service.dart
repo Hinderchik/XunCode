@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,6 +20,10 @@ import 'file_service.dart';
 class TerminalBridge {
   static const _method = MethodChannel('com.xunkal1.xuncode/terminal');
   static const _events = EventChannel('com.xunkal1.xuncode/terminal/events');
+
+  static int? _axsPort;
+  static Process? _axsProcess;
+  static final Map<String, WebSocket> _sockets = {};
 
   // ── AXS binary management ──────────────────────────────────────────
 
@@ -34,6 +40,34 @@ class TerminalBridge {
     // chmod 755
     await Process.run('chmod', ['755', axsFile.path]);
     return axsFile;
+  }
+
+  static Future<void> _ensureAxs() async {
+    if (_axsProcess != null) return;
+    final axs = await _axsBinary();
+    final rootfs = await rootfsPath();
+    final nativeDir = await _method.invokeMethod<String>('getNativeLibraryDir') ??
+        '/data/app/com.xunkal1.xuncode/lib/arm64';
+    final prootBin = '$nativeDir/libproot.so';
+
+    _axsProcess = await Process.start(axs.path, [
+      '-p', '0',
+      '-c', '/bin/sh',
+    ], environment: {
+      'PROOT_PATH': prootBin,
+      'ROOTFS': rootfs,
+      'LD_LIBRARY_PATH': nativeDir,
+    });
+
+    await for (final line in _axsProcess!.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())) {
+      final match = RegExp(r'started on .*:(\d+)').firstMatch(line);
+      if (match != null) {
+        _axsPort = int.parse(match.group(1)!);
+        break;
+      }
+    }
   }
 
   /// Путь к rootfs Alpine
@@ -218,6 +252,7 @@ class TerminalBridge {
     int cols = 80,
     int rows = 24,
   }) async {
+    await _ensureAxs();
     final session = TerminalSession._(id, cols, rows);
     await session._open();
     return session;
@@ -231,12 +266,18 @@ class TerminalBridge {
 
   /// Write data to a terminal session by ID (used by plugins).
   static Future<void> write({required String id, required String data}) async {
-    await _method.invokeMethod('write', {'id': id, 'data': data});
+    final ws = _sockets[id];
+    if (ws != null) {
+      ws.add(data);
+    }
   }
 
   /// Kill a terminal session by ID (used by plugins).
   static Future<void> kill({required String id}) async {
-    await _method.invokeMethod('kill', {'id': id});
+    final ws = _sockets.remove(id);
+    if (ws != null) {
+      await ws.close();
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
@@ -278,26 +319,30 @@ class TerminalSession {
   Stream<String> get output => _output.stream;
 
   Future<void> _open() async {
-    _sub = TerminalBridge._events
-        .receiveBroadcastStream({'id': id})
-        .listen(
-          (event) {
-            if (event is String) _output.add(event);
-          },
-          onError: (e) => _output.add('\n[stream error] $e\n'),
-          onDone: () {
-            if (!_output.isClosed) _output.add('\n[session ended]\n');
-          },
-        );
+    await TerminalBridge._ensureAxs();
+    final port = TerminalBridge._axsPort ?? 8767;
+    final uri = Uri.parse('ws://127.0.0.1:$port/terminals/new');
 
-    final result = await TerminalBridge._method.invokeMethod<String>('create', {
-      'id': id,
-      'cols': cols,
-      'rows': rows,
-    });
-    if (result != null && result != 'ok' && !result.startsWith('[terminal]')) {
-      _output.add(result);
-    }
+    final request = await HttpClient().openUrl('GET', uri);
+    request.headers.add('Upgrade', 'websocket');
+    request.headers.add('Connection', 'Upgrade');
+    request.headers.add('Sec-WebSocket-Key', base64.encode(List<int>.generate(16, (_) => 0)));
+    request.headers.add('Sec-WebSocket-Version', '13');
+
+    final response = await request.close();
+    final socket = await response.detachSocket();
+    final ws = WebSocket.fromUpgradedSocket(socket, serverSide: false);
+    TerminalBridge._sockets[id] = ws;
+
+    ws.listen(
+      (data) {
+        if (data is String) _output.add(data);
+      },
+      onError: (e) => _output.add('\n[stream error] $e\n'),
+      onDone: () {
+        if (!_output.isClosed) _output.add('\n[session ended]\n');
+      },
+    );
   }
 
   Future<void> _openUnsandboxed() async {
@@ -322,7 +367,7 @@ class TerminalSession {
   }
 
   Future<void> write(String data) async {
-    await TerminalBridge._method.invokeMethod('write', {'id': id, 'data': data});
+    await TerminalBridge.write(id: id, data: data);
   }
 
   Future<void> writeLine(String line) => write('$line\n');
@@ -330,16 +375,17 @@ class TerminalSession {
   Future<void> resize(int c, int r) async {
     cols = c;
     rows = r;
-    await TerminalBridge._method.invokeMethod('resize', {
-      'id': id,
-      'cols': c,
-      'rows': r,
-    });
+    final port = TerminalBridge._axsPort ?? 8767;
+    await http.post(
+      Uri.parse('http://127.0.0.1:$port/terminals/$id/resize'),
+      body: jsonEncode({'cols': c, 'rows': r}),
+      headers: {'Content-Type': 'application/json'},
+    );
   }
 
   Future<void> kill() async {
     runCatching(() => _sub?.cancel());
-    await TerminalBridge._method.invokeMethod('kill', {'id': id});
+    await TerminalBridge.kill(id: id);
     if (!_output.isClosed) await _output.close();
   }
 }
