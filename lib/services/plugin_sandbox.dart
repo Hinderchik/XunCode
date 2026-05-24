@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -420,7 +421,7 @@ class PluginSandbox {
   }
 
   Future<bool> _fsExists(String path) async {
-    return File(path).exists() || Directory(path).exists();
+    return await File(path).exists() || await Directory(path).exists();
   }
 
   Future<List<Map<String, Object>>> _fsListDir(String path) async {

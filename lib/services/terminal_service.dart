@@ -96,6 +96,16 @@ class TerminalBridge {
     return true;
   }
 
+  /// Write data to a terminal session by ID (used by plugins).
+  static Future<void> write({required String id, required String data}) async {
+    await _method.invokeMethod('write', {'id': id, 'data': data});
+  }
+
+  /// Kill a terminal session by ID (used by plugins).
+  static Future<void> kill({required String id}) async {
+    await _method.invokeMethod('kill', {'id': id});
+  }
+
   static Future<TerminalSession> createUnsandboxed({required String id}) async {
     final session = TerminalSession._(id, 80, 24);
     await session._openUnsandboxed();
