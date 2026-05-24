@@ -3,315 +3,906 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VScode Mobile · Plugin Marketplace</title>
+<title>XunCode Plugins Marketplace</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: #1e1e1e;
-    color: #d4d4d4;
-    font-family: -apple-system, 'Segoe UI', sans-serif;
-    font-size: 14px;
-    line-height: 1.55;
-    padding: 0;
-  }
-  header {
-    background: #252526;
-    border-bottom: 1px solid #3c3c3c;
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-  }
-  header h1 { color: #569cd6; font-size: 20px; font-weight: 600; }
-  header .market-url {
-    color: #4fc1ff;
-    text-decoration: none;
-    font-size: 12px;
-    margin-left: 16px;
-    padding: 4px 10px;
-    background: #1a3a4a;
-    border-radius: 12px;
-  }
-  header .market-url:hover { background: #1f4a5e; }
-  header .nav { margin-left: auto; }
-  header .nav button {
-    background: #2d2d2d;
-    color: #ccc;
-    border: 1px solid #3c3c3c;
-    padding: 6px 14px;
-    border-radius: 4px;
-    margin-left: 6px;
-    cursor: pointer;
-    font: inherit;
-  }
-  header .nav button.active { background: #007acc; color: #fff; border-color: #007acc; }
-  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
-  section { display: none; }
-  section.active { display: block; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-  .card {
-    background: #252526;
-    border: 1px solid #3c3c3c;
-    border-radius: 6px;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-  }
-  .card h3 { color: #fff; font-size: 15px; }
-  .card .author { color: #888; font-size: 11px; margin-bottom: 6px; }
-  .card .desc { color: #ccc; font-size: 12px; flex: 1; margin-bottom: 8px; }
-  .card .meta { display: flex; gap: 12px; font-size: 11px; color: #888; align-items: center; }
-  .stars { color: #007acc; }
-  button.primary {
-    background: #007acc;
-    color: #fff;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font: inherit;
-  }
-  button.primary:hover { background: #006bb3; }
-  input, textarea {
-    background: #2d2d2d;
-    color: #d4d4d4;
-    border: 1px solid #3c3c3c;
-    padding: 8px 10px;
-    border-radius: 4px;
-    font: inherit;
-    width: 100%;
-  }
-  label { display: block; color: #888; font-size: 11px; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .form { max-width: 520px; }
-  .form button { margin-top: 14px; }
-  .pending-row {
-    display: flex; align-items: center; gap: 12px;
-    background: #252526; border: 1px solid #3c3c3c; border-radius: 6px;
-    padding: 12px; margin-bottom: 8px;
-  }
-  .pending-row .info { flex: 1; }
-  .pending-row a { color: #4fc1ff; }
-  footer {
-    border-top: 1px solid #3c3c3c;
-    padding: 24px;
-    margin-top: 40px;
-    color: #888;
-    font-size: 12px;
-    text-align: center;
-  }
-  footer a { color: #4fc1ff; text-decoration: none; margin: 0 8px; }
-  .muted { color: #888; font-size: 12px; }
-  .empty { padding: 40px; text-align: center; color: #888; }
-  .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: #007acc; color: #fff; padding: 10px 16px; border-radius: 4px;
-    font-size: 13px; opacity: 0; transition: opacity .2s;
-    pointer-events: none;
-  }
-  .toast.show { opacity: 1; }
+:root {
+  --bg: #1e1e1e;
+  --bg2: #252526;
+  --bg3: #2d2d2d;
+  --bg4: #3c3c3c;
+  --fg: #d4d4d4;
+  --fg-bright: #ffffff;
+  --fg-muted: #888888;
+  --accent: #007acc;
+  --accent-hover: #006bb3;
+  --accent-light: #4fc1ff;
+  --green: #4ec9b0;
+  --red: #f44747;
+  --yellow: #cca700;
+  --border: #3c3c3c;
+  --radius: 6px;
+  --shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Header ────────────────────────────────────────────────────────── */
+header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  gap: 16px;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--fg-bright);
+  flex-shrink: 0;
+}
+.logo-icon {
+  width: 28px; height: 28px;
+  background: var(--accent);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: #fff;
+}
+.logo-text {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+}
+.logo-sub {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: -2px;
+}
+header nav {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+header nav button {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid transparent;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  transition: all .15s;
+}
+header nav button:hover {
+  background: var(--bg3);
+}
+header nav button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── Main ──────────────────────────────────────────────────────────── */
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+}
+.section { display: none; }
+.section.active { display: block; }
+
+/* ── Search ────────────────────────────────────────────────────────── */
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  position: relative;
+}
+.search-input input {
+  width: 100%;
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 10px 14px 10px 36px;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color .15s;
+}
+.search-input input:focus { outline: none; border-color: var(--accent); }
+.search-input .search-icon {
+  position: absolute;
+  left: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--fg-muted); font-size: 14px;
+}
+.filter-select {
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+/* ── Plugin Grid ───────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.plugin-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow .15s, border-color .15s;
+  cursor: pointer;
+}
+.plugin-card:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--accent);
+}
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.card-icon {
+  width: 40px; height: 40px;
+  background: var(--bg4);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.card-info { flex: 1; min-width: 0; }
+.card-info h3 {
+  color: var(--fg-bright);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+.card-author { color: var(--accent-light); }
+.card-desc {
+  color: var(--fg);
+  font-size: 12px;
+  opacity: .85;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+.card-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.stars { color: var(--yellow); letter-spacing: 1px; }
+.downloads { display: flex; align-items: center; gap: 3px; }
+.card-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tag {
+  background: var(--bg3);
+  color: var(--fg-muted);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.card-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+.btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--accent-hover); }
+.btn-outline {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover { background: var(--bg3); }
+.btn-danger {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+.btn-danger:hover { background: rgba(244,71,71,.1); }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-success { background: var(--green); }
+.btn-success:hover { opacity: .85; }
+
+/* ── Plugin Detail View ────────────────────────────────────────────── */
+.back-link {
+  color: var(--accent-light);
+  text-decoration: none;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+.plugin-detail {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+.detail-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.detail-icon {
+  width: 56px; height: 56px;
+  background: var(--accent);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.detail-info h1 {
+  color: var(--fg-bright);
+  font-size: 22px;
+  font-weight: 700;
+}
+.detail-info .subtitle {
+  color: var(--fg-muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.detail-info .subtitle span { margin-right: 12px; }
+.detail-desc {
+  font-size: 14px;
+  color: var(--fg);
+  margin: 16px 0;
+  line-height: 1.7;
+}
+.detail-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.detail-section h2 {
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.permissions-list {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.permission-badge {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--accent-light);
+}
+.review-item {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.review-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px;
+}
+.review-header .author { color: var(--fg-bright); font-weight: 600; font-size: 13px; }
+.review-header .date { color: var(--fg-muted); font-size: 11px; }
+.review-text { font-size: 13px; color: var(--fg); }
+.detail-actions {
+  display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;
+}
+
+/* ── Submit Form ───────────────────────────────────────────────────── */
+.form-container {
+  max-width: 600px;
+}
+.form-group {
+  margin-bottom: 16px;
+}
+.form-group label {
+  display: block;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 6px;
+}
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  background: var(--bg3);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color .15s;
+}
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.form-group textarea { resize: vertical; min-height: 80px; }
+.form-group .hint {
+  color: var(--fg-muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* ── Admin ─────────────────────────────────────────────────────────── */
+.admin-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.pending-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.pending-item .info { flex: 1; min-width: 200px; }
+.pending-item .info strong { color: var(--fg-bright); }
+.pending-item .muted { font-size: 12px; margin-top: 2px; }
+.pending-actions { display: flex; gap: 6px; }
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 28px 24px;
+  margin-top: 60px;
+  text-align: center;
+  background: var(--bg2);
+}
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.footer-links a {
+  color: var(--accent-light);
+  text-decoration: none;
+  font-size: 13px;
+}
+.footer-links a:hover { text-decoration: underline; }
+.footer-copy {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity .2s;
+  pointer-events: none;
+  z-index: 1000;
+}
+.toast.show { opacity: 1; }
+.toast.error { background: var(--red); }
+
+/* ── Empty state ───────────────────────────────────────────────────── */
+.empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+.empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+/* ── Responsive ────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  header { padding: 0 14px; }
+  .header-inner { height: 48px; }
+  .logo-text { font-size: 15px; }
+  .logo-sub { display: none; }
+  header nav button { padding: 5px 10px; font-size: 12px; }
+  main { padding: 16px 14px; }
+  .grid { grid-template-columns: 1fr; }
+  .plugin-detail { padding: 18px; }
+  .detail-header { flex-direction: column; }
+  .footer-links { gap: 12px; }
+}
 </style>
 </head>
 <body>
 
+<!-- ── Header ─────────────────────────────────────────────────────── -->
 <header>
-  <h1>VScode Mobile Plugins</h1>
-  <a href="https://vscodemobile-market.vercel.app" class="market-url" target="_blank">vscodemobile-market.vercel.app</a>
-  <div class="nav">
-    <button class="active" data-tab="browse">Browse</button>
-    <button data-tab="submit">Submit</button>
-    <button data-tab="admin">Admin</button>
+  <div class="header-inner">
+    <a href="#" class="logo" onclick="showSection('browse'); return false;">
+      <div class="logo-icon">XC</div>
+      <div>
+        <div class="logo-text">XunCode Marketplace</div>
+        <div class="logo-sub">Плагины для редактора</div>
+      </div>
+    </a>
+    <nav>
+      <button class="active" data-tab="browse" onclick="showSection('browse')">Каталог</button>
+      <button data-tab="submit" onclick="showSection('submit')">Отправить</button>
+      <button data-tab="admin" onclick="showSection('admin')">Админ</button>
+    </nav>
   </div>
 </header>
 
 <main>
 
-<section class="active" data-tab="browse">
-  <div id="plugin-list" class="grid">
-    <div class="empty">Loading…</div>
+<!-- ── Browse Section ─────────────────────────────────────────────── -->
+<section class="section active" id="sec-browse">
+  <div class="search-bar">
+    <div class="search-input">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-input" placeholder="Поиск плагинов по названию, автору, описанию…" oninput="debouncedSearch()" />
+    </div>
+    <select class="filter-select" id="sort-select" onchange="renderPlugins()">
+      <option value="rating">По рейтингу</option>
+      <option value="downloads">По скачиваниям</option>
+      <option value="name">По имени</option>
+    </select>
+  </div>
+  <div id="plugin-grid" class="grid">
+    <div class="empty"><div class="empty-icon">⏳</div>Загрузка…</div>
   </div>
 </section>
 
-<section data-tab="submit">
-  <h2 style="color:#4ec9b0; margin-bottom:8px;">Submit a Plugin</h2>
-  <p class="muted">Paste a public GitHub repository URL. The repo must contain <code>plugin.json</code> and <code>main.js</code> in its root.</p>
-  <div class="form">
-    <label>Plugin ID</label>
-    <input id="s-id" placeholder="com.author.plugin" />
-    <label>Name</label>
-    <input id="s-name" placeholder="My Plugin" />
-    <label>Author</label>
-    <input id="s-author" placeholder="@yourhandle" />
-    <label>Description</label>
-    <textarea id="s-desc" rows="3"></textarea>
-    <label>GitHub URL</label>
-    <input id="s-url" placeholder="https://github.com/owner/repo" />
-    <button class="primary" id="s-submit">Submit for review</button>
+<!-- ── Plugin Detail Section ──────────────────────────────────────── -->
+<section class="section" id="sec-detail">
+  <a class="back-link" onclick="showSection('browse'); return false;">← Назад к каталогу</a>
+  <div id="detail-content"></div>
+</section>
+
+<!-- ── Submit Section ─────────────────────────────────────────────── -->
+<section class="section" id="sec-submit">
+  <div class="form-container">
+    <h2 style="color:var(--green); font-size:18px; margin-bottom:6px;">Отправить плагин</h2>
+    <p style="color:var(--fg-muted); font-size:13px; margin-bottom:20px;">
+      Репозиторий должен содержать <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;">plugin.json</code> и <code style="background:var(--bg3);padding:1px 5px;border-radius:3px;">main.js</code> в корне.
+    </p>
+
+    <div class="form-group">
+      <label>Plugin ID *</label>
+      <input id="s-id" placeholder="com.author.my-plugin" />
+    </div>
+    <div class="form-group">
+      <label>Название *</label>
+      <input id="s-name" placeholder="My Plugin" />
+    </div>
+    <div class="form-group">
+      <label>Автор *</label>
+      <input id="s-author" placeholder="@yourhandle" />
+    </div>
+    <div class="form-group">
+      <label>Версия</label>
+      <input id="s-version" placeholder="1.0.0" />
+      <div class="hint">По умолчанию: 1.0.0</div>
+    </div>
+    <div class="form-group">
+      <label>Описание</label>
+      <textarea id="s-desc" rows="3" placeholder="Что делает ваш плагин?"></textarea>
+    </div>
+    <div class="form-group">
+      <label>GitHub URL *</label>
+      <input id="s-url" placeholder="https://github.com/owner/repo" />
+    </div>
+    <div class="form-group">
+      <label>Теги (через запятую)</label>
+      <input id="s-tags" placeholder="productivity, themes, tools" />
+    </div>
+    <button class="btn" id="s-submit">Отправить на модерацию</button>
   </div>
 </section>
 
-<section data-tab="admin">
-  <h2 style="color:#4ec9b0; margin-bottom:8px;">Admin</h2>
-  <p class="muted">Enter your API key to load pending submissions.</p>
-  <div class="form">
-    <label>Admin API Key</label>
-    <input id="a-key" type="password" placeholder="ADMIN_API_KEY" />
-    <button class="primary" id="a-load">Load pending</button>
+<!-- ── Admin Section ──────────────────────────────────────────────── -->
+<section class="section" id="sec-admin">
+  <div class="admin-section">
+    <h2 style="color:var(--green); font-size:16px; margin-bottom:6px;">Админ-панель</h2>
+    <p style="color:var(--fg-muted); font-size:13px; margin-bottom:16px;">Введите API-ключ для управления плагинами.</p>
+    <div class="form-group">
+      <label>API Key</label>
+      <input id="a-key" type="password" placeholder="ADMIN_API_KEY" />
+    </div>
+    <button class="btn" id="a-load">Загрузить очередь</button>
+    <div id="pending-list" style="margin-top:20px;"></div>
   </div>
-  <div id="pending-list" style="margin-top:20px;"></div>
 </section>
 
 </main>
 
+<!-- ── Footer ─────────────────────────────────────────────────────── -->
 <footer>
-  <div>VScode Mobile · plugin marketplace</div>
-  <div style="margin-top:6px;">
-    <a href="https://github.com/Hinderchik" target="_blank">GitHub: @Hinderchik</a>
-    <a href="https://t.me/XunKal1Dev" target="_blank">Telegram Dev: @XunKal1Dev</a>
-    <a href="https://t.me/GodPassTGK" target="_blank">Telegram: @GodPassTGK</a>
+  <div class="footer-links">
+    <a href="https://github.com/Hinderchik" target="_blank">⭐ GitHub: Hinderchik</a>
+    <a href="https://t.me/GodPassTGK" target="_blank">💬 Telegram: @GodPassTGK</a>
+    <a href="https://t.me/XunKal1Dev" target="_blank">🔧 Dev: @XunKal1Dev</a>
+    <a href="https://www.donationalerts.com/r/xunkal1" target="_blank">❤️ Поддержать</a>
   </div>
+  <div class="footer-copy">XunCode © 2026 — мощный редактор кода для Android</div>
 </footer>
 
 <div id="toast" class="toast"></div>
 
 <script>
-  const tabs = document.querySelectorAll('header .nav button');
-  const sections = document.querySelectorAll('section[data-tab]');
-  tabs.forEach(t => t.addEventListener('click', () => {
-    tabs.forEach(b => b.classList.toggle('active', b === t));
-    sections.forEach(s => s.classList.toggle('active', s.dataset.tab === t.dataset.tab));
-    if (t.dataset.tab === 'browse') loadPlugins();
-  }));
+// ── State ────────────────────────────────────────────────────────────
+let allPlugins = [];
+let currentDetail = null;
 
-  function toast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2200);
+// ── Navigation ───────────────────────────────────────────────────────
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('header nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  document.querySelector(`header nav button[data-tab="${name}"]`)?.classList.add('active');
+  if (name === 'browse') loadPlugins();
+  window.scrollTo(0, 0);
+}
+
+// ── Toast ────────────────────────────────────────────────────────────
+function toast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function stars(rating) {
+  const r = Math.round(rating || 0);
+  return '★'.repeat(Math.min(r, 5)) + '☆'.repeat(Math.max(0, 5 - r));
+}
+
+let searchTimer = null;
+function debouncedSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderPlugins, 250);
+}
+
+// ── Load plugins ────────────────────────────────────────────────────
+async function loadPlugins() {
+  const grid = document.getElementById('plugin-grid');
+  grid.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Загрузка…</div>';
+  try {
+    const r = await fetch('/api/plugins/list');
+    allPlugins = await r.json();
+    if (!Array.isArray(allPlugins)) allPlugins = [];
+    renderPlugins();
+  } catch (e) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">❌</div>Не удалось загрузить. Попробуйте позже.</div>';
+  }
+}
+
+// ── Render plugins ──────────────────────────────────────────────────
+function renderPlugins() {
+  const grid = document.getElementById('plugin-grid');
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+  const sort = document.getElementById('sort-select')?.value || 'rating';
+
+  let list = [...allPlugins];
+
+  // filter
+  if (q) {
+    list = list.filter(p =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.author || '').toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.id || '').toLowerCase().includes(q) ||
+      (p.tags || []).some(t => t.toLowerCase().includes(q))
+    );
   }
 
-  function stars(rating) {
-    const r = Math.round(rating || 0);
-    return '★'.repeat(r) + '☆'.repeat(5 - r);
+  // sort
+  if (sort === 'rating') list.sort((a, b) => (b.rating || 0) - (a.ratio || 0) || (b.downloads || 0) - (a.downloads || 0));
+  else if (sort === 'downloads') list.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+  else if (sort === 'name') list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  if (list.length === 0) {
+    grid.innerHTML = `<div class="empty"><div class="empty-icon">📭</div>${q ? 'Ничего не найдено' : 'Плагинов пока нет. <a href="#" onclick="showSection(\'submit\'); return false;" style="color:var(--accent-light)">Будьте первым!</a>'}</div>`;
+    return;
   }
 
-  async function loadPlugins() {
-    const list = document.getElementById('plugin-list');
-    list.innerHTML = '<div class="empty">Loading…</div>';
-    try {
-      const r = await fetch('/api/plugins/list');
-      const data = await r.json();
-      if (!Array.isArray(data) || data.length === 0) {
-        list.innerHTML = '<div class="empty">No plugins yet. Be the first to <a href="#" onclick="document.querySelector(\'[data-tab=submit]\').click(); return false;" style="color:#4fc1ff">submit one</a>.</div>';
-        return;
-      }
-      list.innerHTML = data.map(p => `
-        <div class="card">
-          <h3>${escapeHtml(p.name || p.id)}</h3>
-          <div class="author">${escapeHtml(p.author || '')} · v${escapeHtml(p.version || '1.0.0')}</div>
-          <div class="desc">${escapeHtml(p.description || '')}</div>
-          <div class="meta">
-            <span class="stars">${stars(p.rating)}</span>
-            <span>${(p.rating || 0).toFixed(1)} (${p.reviewsCount || 0})</span>
-            <span>↓ ${p.downloads || 0}</span>
-            <span style="margin-left:auto"><a href="${escapeAttr(p.githubUrl)}" target="_blank" style="color:#4fc1ff;font-size:11px;">GitHub</a></span>
+  grid.innerHTML = list.map(p => `
+    <div class="plugin-card" onclick="showDetail('${esc(p.id)}')">
+      <div class="card-top">
+        <div class="card-icon">${p.icon || '🧩'}</div>
+        <div class="card-info">
+          <h3>${esc(p.name || p.id)}</h3>
+          <div class="card-meta">
+            <span class="card-author">${esc(p.author || 'Unknown')}</span>
+            <span>v${esc(p.version || '1.0.0')}</span>
           </div>
         </div>
-      `).join('');
-    } catch (e) {
-      list.innerHTML = '<div class="empty">Failed to load plugins.</div>';
-    }
-  }
-
-  document.getElementById('s-submit').addEventListener('click', async () => {
-    const body = {
-      pluginId: document.getElementById('s-id').value.trim(),
-      name: document.getElementById('s-name').value.trim(),
-      author: document.getElementById('s-author').value.trim(),
-      description: document.getElementById('s-desc').value.trim(),
-      githubUrl: document.getElementById('s-url').value.trim(),
-    };
-    if (!body.pluginId || !body.githubUrl) {
-      toast('Plugin ID and GitHub URL required');
-      return;
-    }
-    try {
-      const r = await fetch('/api/admin/submit', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await r.json();
-      if (r.ok && data.success) {
-        toast('Submitted for review!');
-        ['s-id','s-name','s-author','s-desc','s-url'].forEach(id => document.getElementById(id).value = '');
-      } else {
-        toast(data.error || 'Submit failed');
-      }
-    } catch (e) {
-      toast('Network error');
-    }
-  });
-
-  document.getElementById('a-load').addEventListener('click', async () => {
-    const key = document.getElementById('a-key').value.trim();
-    if (!key) return toast('Enter API key');
-    const list = document.getElementById('pending-list');
-    list.innerHTML = '<div class="empty">Loading…</div>';
-    try {
-      const r = await fetch('/api/admin/pending', {
-        headers: { 'x-admin-key': key },
-      });
-      if (r.status === 401) {
-        list.innerHTML = '<div class="empty">Invalid API key.</div>';
-        return;
-      }
-      if (!r.ok) throw new Error('failed');
-      const items = await r.json();
-      if (!items.length) {
-        list.innerHTML = '<div class="empty">No pending submissions.</div>';
-        return;
-      }
-      list.innerHTML = items.map(it => `
-        <div class="pending-row">
-          <div class="info">
-            <strong>${escapeHtml(it.name || it.id)}</strong>
-            <div class="muted">${escapeHtml(it.id)} · ${escapeHtml(it.author || '')}</div>
-            <div class="muted">${escapeHtml(it.description || '')}</div>
-            <a href="${escapeAttr(it.githubUrl)}" target="_blank">${escapeHtml(it.githubUrl)}</a>
-          </div>
-          <button class="primary" data-id="${escapeAttr(it.id)}">Approve</button>
+      </div>
+      <div class="card-desc">${esc(p.description || 'Нет описания')}</div>
+      ${(p.tags || []).length > 0 ? `<div class="card-tags">${(p.tags || []).slice(0, 3).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+      <div class="card-footer">
+        <span class="stars">${stars(p.rating)}</span>
+        <span style="font-size:11px">${(p.rating || 0).toFixed(1)}</span>
+        <span class="downloads">↓ ${p.downloads || 0}</span>
+        <div class="card-actions">
+          <button class="btn btn-sm" onclick="event.stopPropagation(); downloadPlugin('${esc(p.id)}', '${esc(p.githubUrl || '')}')">Скачать</button>
         </div>
-      `).join('');
-      list.querySelectorAll('button.primary').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const id = btn.dataset.id;
-          const r = await fetch('/api/admin/approve', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ id, adminKey: key }),
-          });
-          const data = await r.json();
-          if (r.ok && data.ok) {
-            toast('Approved');
-            document.getElementById('a-load').click();
-          } else {
-            toast(data.error || 'Approve failed');
-          }
-        });
-      });
-    } catch (e) {
-      list.innerHTML = '<div class="empty">Failed to load pending.</div>';
-    }
-  });
+      </div>
+    </div>
+  `).join('');
+}
 
-  function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+// ── Plugin Detail ────────────────────────────────────────────────────
+async function showDetail(id) {
+  const plugin = allPlugins.find(p => p.id === id);
+  if (!plugin) return;
+  currentDetail = plugin;
+  showSection('detail');
+
+  const reviews = await (async () => {
+    try { const r = await fetch(`/api/plugins/review?id=${encodeURIComponent(id)}`); return await r.json(); } catch (_) { return []; }
+  })();
+
+  const content = document.getElementById('detail-content');
+  content.innerHTML = `
+    <div class="plugin-detail">
+      <div class="detail-header">
+        <div class="detail-icon">${plugin.icon || '🧩'}</div>
+        <div class="detail-info">
+          <h1>${esc(plugin.name || plugin.id)}</h1>
+          <div class="subtitle">
+            <span>👤 ${esc(plugin.author || 'Unknown')}</span>
+            <span>🏷 v${esc(plugin.version || '1.0.0')}</span>
+            <span class="stars">${stars(plugin.rating)}</span>
+            <span>${(plugin.rating || 0).toFixed(1)} (${plugin.reviewsCount || 0} отзывов)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-desc">${esc(plugin.description || 'Нет описания.')}</div>
+
+      ${(plugin.tags || []).length > 0 ? `
+        <div class="detail-section">
+          <h2>Теги</h2>
+          <div class="card-tags">${(plugin.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+        </div>
+      ` : ''}
+
+      ${(plugin.permissions || []).length > 0 ? `
+        <div class="detail-section">
+          <h2>Разрешения</h2>
+          <div class="permissions-list">${(plugin.permissions || []).map(p => `<span class="permission-badge">${esc(p)}</span>`).join('')}</div>
+        </div>
+      ` : ''}
+
+      <div class="detail-section">
+        <h2>Отзывы (${reviews.length})</h2>
+        ${reviews.length === 0 ? '<div class="empty" style="padding:20px">Пока нет отзывов</div>' : reviews.map(r => `
+          <div class="review-item">
+            <div class="review-header">
+              <span class="author">${esc(r.author || 'Аноним')}</span>
+              <span class="stars">${stars(r.rating)}</span>
+            </div>
+            <div class="review-text">${esc(r.text || r.review || '')}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="detail-actions">
+        <button class="btn" onclick="downloadPlugin('${esc(plugin.id)}', '${esc(plugin.githubUrl || '')}')">⬇ Скачать .zip</button>
+        ${plugin.githubUrl ? `<a class="btn btn-outline" href="${esc(plugin.githubUrl)}" target="_blank">GitHub</a>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ── Download ─────────────────────────────────────────────────────────
+async function downloadPlugin(id, url) {
+  try {
+    await fetch('/api/plugins/download', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pluginId: id, userToken: 'web-' + Math.random().toString(36).slice(2) }),
+    });
+  } catch (_) {}
+  if (url) {
+    const a = document.createElement('a');
+    a.href = `${url}/archive/refs/heads/main.zip`;
+    a.download = `${id}.zip`;
+    a.target = '_blank';
+    a.click();
+    toast('Скачивание начато!');
+  } else {
+    toast('GitHub URL не указан', true);
   }
-  function escapeAttr(s) { return escapeHtml(s); }
+}
 
-  loadPlugins();
+// ── Submit ───────────────────────────────────────────────────────────
+document.getElementById('s-submit')?.addEventListener('click', async () => {
+  const body = {
+    pluginId: document.getElementById('s-id').value.trim(),
+    name: document.getElementById('s-name').value.trim(),
+    author: document.getElementById('s-author').value.trim(),
+    version: document.getElementById('s-version').value.trim() || '1.0.0',
+    description: document.getElementById('s-desc').value.trim(),
+    githubUrl: document.getElementById('s-url').value.trim(),
+    tags: (document.getElementById('s-tags')?.value || '').split(',').map(t => t.trim()).filter(Boolean),
+    permissions: [],
+  };
+  if (!body.pluginId || !body.name || !body.githubUrl) {
+    toast('Заполните обязательные поля (*)', true);
+    return;
+  }
+  try {
+    const r = await fetch('/api/admin/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (r.ok && data.success) {
+      toast('✅ Отправлено на модерацию!');
+      ['s-id','s-name','s-author','s-version','s-desc','s-url','s-tags'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+    } else {
+      toast(data.error || 'Ошибка отправки', true);
+    }
+  } catch (e) {
+    toast('Ошибка сети', true);
+  }
+});
+
+// ── Admin ────────────────────────────────────────────────────────────
+document.getElementById('a-load')?.addEventListener('click', async () => {
+  const key = document.getElementById('a-key').value.trim();
+  if (!key) return toast('Введите API-ключ', true);
+  const list = document.getElementById('pending-list');
+  list.innerHTML = '<div class="empty">Загрузка…</div>';
+  try {
+    const r = await fetch('/api/admin/pending', { headers: { 'x-admin-key': key } });
+    if (r.status === 401) { list.innerHTML = '<div class="empty">Неверный API-ключ.</div>'; return; }
+    if (!r.ok) throw new Error('failed');
+    const items = await r.json();
+    if (!items.length) { list.innerHTML = '<div class="empty">Нет плагинов на модерации.</div>'; return; }
+    list.innerHTML = items.map(it => `
+      <div class="pending-item">
+        <div class="info">
+          <strong>${esc(it.name || it.id)}</strong>
+          <div class="muted">${esc(it.id)} · ${esc(it.author || '')} · v${esc(it.version || '1.0.0')}</div>
+          <div class="muted">${esc(it.description || '')}</div>
+          <a href="${esc(it.githubUrl || '')}" target="_blank" style="color:var(--accent-light);font-size:12px">${esc(it.githubUrl || '')}</a>
+        </div>
+        <div class="pending-actions">
+          <button class="btn btn-sm btn-success" onclick="approvePlugin('${esc(it.id)}', '${esc(key)}', this)">✓ Одобрить</button>
+          <button class="btn btn-sm btn-danger" onclick="rejectPlugin('${esc(it.id)}', '${esc(key)}', this)">✕ Отклонить</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = '<div class="empty">Ошибка загрузки.</div>';
+  }
+});
+
+async function approvePlugin(id, key, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/admin/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, adminKey: key }),
+    });
+    const data = await r.json();
+    if (r.ok && data.ok) { toast('✅ Одобрено!'); btn.closest('.pending-item').remove(); }
+    else { toast(data.error || 'Ошибка', true); btn.disabled = false; }
+  } catch (e) { toast('Ошибка сети', true); btn.disabled = false; }
+}
+
+async function rejectPlugin(id, key, btn) {
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/admin/reject', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, adminKey: key }),
+    });
+    if (r.ok) { toast('Отклонено'); btn.closest('.pending-item').remove(); }
+    else { toast('Ошибка', true); btn.disabled = false; }
+  } catch (e) { toast('Ошибка сети', true); btn.disabled = false; }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
+loadPlugins();
 </script>
-
 </body>
 </html>

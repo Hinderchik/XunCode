@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService {
+  SettingsService._();
+  static final SettingsService instance = SettingsService._();
+
   late SharedPreferences _prefs;
 
   Future<void> init() async {

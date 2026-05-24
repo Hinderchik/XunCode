@@ -1,9 +1,10 @@
 {
   "id": "com.example.hello",
   "name": "Hello World",
-  "version": "1.0.0",
-  "author": "example",
-  "description": "Says hello when activated — a minimal VScode Mobile plugin example",
+  "version": "2.0.0",
+  "author": "XunCode",
+  "description": "Demonstrates the full XunCode plugin API — fs, terminal, http, ui panels, process, settings, storage (binary), editor control",
   "main": "main.js",
-  "tags": ["example", "hello"]
+  "tags": ["example", "tutorial", "api-demo"],
+  "permissions": ["fs.write", "terminal", "process", "storage.write", "settings.write"]
 }

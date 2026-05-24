@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
@@ -8,8 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/plugin.dart';
 import '../services/file_service.dart';
+import '../services/settings_service.dart';
 import 'editor_bridge.dart';
 import 'plugin_service.dart';
+import 'terminal_service.dart';
 
 typedef UiCallback = void Function(String message, {bool isError});
 typedef OpenFileCallback = Future<void> Function(String path);
@@ -111,9 +114,48 @@ class PluginSandbox {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Permission map: which methods require which permission
+  // ─────────────────────────────────────────────────────────────────────────
+  static const _permMap = <String, String>{
+    // fs write
+    'fs.writeFile': 'fs.write', 'fs.appendFile': 'fs.write',
+    'fs.deleteFile': 'fs.write', 'fs.deleteDir': 'fs.write',
+    'fs.createDir': 'fs.write', 'fs.copy': 'fs.write',
+    'fs.move': 'fs.write', 'fs.delete': 'fs.write',
+    // terminal
+    'terminal.run': 'terminal', 'terminal.create': 'terminal',
+    'terminal.send': 'terminal', 'terminal.kill': 'terminal',
+    // process
+    'process.spawn': 'process', 'process.exec': 'process',
+    // settings write
+    'settings.set': 'settings.write',
+    // storage write
+    'storage.set': 'storage.write', 'storage.delete': 'storage.write',
+    'storage.clear': 'storage.write', 'storage.setBinary': 'storage.write',
+  };
+
+  Future<void> _checkPermission(String method) async {
+    final required = _permMap[method];
+    if (required == null) return; // no permission needed
+    final granted = await PluginService.getGrantedPermissions(plugin.id);
+    if (!granted.contains(required)) {
+      // Auto-grant for plugins that declare it in plugin.json
+      if (plugin.permissions.contains(required)) {
+        await PluginService.grantPermission(plugin.id, required);
+        return;
+      }
+      throw Exception('Permission denied: $required (request it in plugin.json permissions[])');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Dispatch — маршрутизация вызовов JS → Dart
+  // ─────────────────────────────────────────────────────────────────────────
   Future<dynamic> _dispatch(String method, Map<String, dynamic> p) async {
+    await _checkPermission(method);
     switch (method) {
-      // editor
+      // ── editor ──────────────────────────────────────────────────────
       case 'editor.getText':
         return editor.getText();
       case 'editor.setText':
@@ -164,13 +206,23 @@ class PluginSandbox {
       case 'editor.executeCommand':
         await editor.executeCommand(p['command']?.toString() ?? '');
         return null;
+      case 'editor.openFile':
+        if (onOpenFile != null) await onOpenFile!(p['path']?.toString() ?? '');
+        return null;
+      case 'editor.getOpenFiles':
+        return <String>[]; // TODO: track open files
+      case 'editor.closeFile':
+        return null; // TODO
 
-      // ui
+      // ── ui ──────────────────────────────────────────────────────────
       case 'ui.showMessage':
         onUiMessage(p['text']?.toString() ?? '');
         return null;
       case 'ui.showError':
         onUiMessage(p['text']?.toString() ?? '', isError: true);
+        return null;
+      case 'ui.showWarning':
+        onUiMessage('⚠ ${p['text']?.toString() ?? ''}');
         return null;
       case 'ui.showInputBox':
         return onShowInputBox?.call(
@@ -183,8 +235,20 @@ class PluginSandbox {
             ? (p['items'] as List).map((e) => e.toString()).toList()
             : <String>[];
         return onShowQuickPick?.call(items, p['title']?.toString());
+      case 'ui.showProgress':
+        // fire-and-forget: plugin manages its own progress UI via messages
+        return null;
+      case 'ui.createStatusBarItem':
+        return {'setText': () {}, 'dispose': () {}};
+      case 'ui.createWebViewPanel':
+        return {'postMessage': () {}, 'dispose': () {}};
+      case 'ui.showDiff':
+        return {'accepted': false}; // plugin shows diff via its own UI
+      case 'ui.withProgress':
+        await (p['task'] as Future?)?.catchError((_) {});
+        return null;
 
-      // storage
+      // ── storage ─────────────────────────────────────────────────────
       case 'storage.get':
         return _storageGet(p['key']?.toString() ?? '');
       case 'storage.set':
@@ -196,26 +260,66 @@ class PluginSandbox {
       case 'storage.clear':
         await _storageClear();
         return null;
+      case 'storage.getBinary':
+        return _storageGetBinary(p['key']?.toString() ?? '');
+      case 'storage.setBinary':
+        await _storageSetBinary(
+          p['key']?.toString() ?? '',
+          p['data'] is List<int> ? p['data'] as List<int> : [],
+        );
 
-      // http
+      // ── http ────────────────────────────────────────────────────────
       case 'http.get':
         return _httpGet(p);
       case 'http.post':
         return _httpPost(p);
+      case 'http.put':
+        return _httpPut(p);
+      case 'http.patch':
+        return _httpPatch(p);
+      case 'http.delete':
+        return _httpDelete(p);
+      case 'http.stream':
+        return _httpStream(p);
+      case 'http.webSocket':
+        return {'id': ''}; // WS handled differently, placeholder
 
-      // fs
+      // ── fs ──────────────────────────────────────────────────────────
       case 'fs.readFile':
         return _fsReadFile(p['path']?.toString() ?? '');
       case 'fs.writeFile':
         return _fsWriteFile(p['path']?.toString() ?? '', p['data']?.toString() ?? '');
+      case 'fs.deleteFile':
+        return _fsDeleteFile(p['path']?.toString() ?? '');
       case 'fs.delete':
         return _fsDelete(p['path']?.toString() ?? '');
+      case 'fs.createDir':
+        return _fsCreateDir(p['path']?.toString() ?? '');
+      case 'fs.deleteDir':
+        return _fsDeleteDir(p['path']?.toString() ?? '');
       case 'fs.exists':
         return _fsExists(p['path']?.toString() ?? '');
       case 'fs.listDir':
         return _fsListDir(p['path']?.toString() ?? '');
+      case 'fs.copy':
+        return _fsCopy(p['from']?.toString() ?? '', p['to']?.toString() ?? '');
+      case 'fs.move':
+        return _fsMove(p['from']?.toString() ?? '', p['to']?.toString() ?? '');
+      case 'fs.watch':
+        return {'dispose': () {}};
+      case 'fs.getRoot':
+        await FileService.ensureLayout();
+        return FileService.projectsDir;
+      case 'fs.getCurrent':
+        return FileService.projectsDir;
+      case 'fs.stat':
+        return _fsStat(p['path']?.toString() ?? '');
+      case 'fs.appendFile':
+        return _fsAppendFile(p['path']?.toString() ?? '', p['data']?.toString() ?? '');
+      case 'fs.readDir':
+        return _fsListDir(p['path']?.toString() ?? '');
 
-      // workspace
+      // ── workspace ───────────────────────────────────────────────────
       case 'workspace.getRoot':
         await FileService.ensureLayout();
         return FileService.projectsDir;
@@ -224,12 +328,50 @@ class PluginSandbox {
       case 'workspace.openFile':
         if (onOpenFile != null) await onOpenFile!(p['path']?.toString() ?? '');
         return null;
+      case 'workspace.getOpenFiles':
+        return <String>[];
+
+      // ── terminal ────────────────────────────────────────────────────
+      case 'terminal.run':
+        return _terminalRun(p['cmd']?.toString() ?? '', p['cwd']?.toString());
+      case 'terminal.create':
+        return TerminalBridge.create(id: 'plugin-${plugin.id}', cols: 80, rows: 24)
+            .then((_) => 'plugin-${plugin.id}');
+      case 'terminal.send':
+        TerminalBridge.write(id: 'plugin-${plugin.id}', data: p['input']?.toString() ?? '');
+        return null;
+      case 'terminal.kill':
+        await TerminalBridge.kill(id: 'plugin-${plugin.id}');
+        return null;
+      case 'terminal.onOutput':
+        // Plugin subscribes via hook, returns dispose fn
+        return {'dispose': () {}};
+
+      // ── process ─────────────────────────────────────────────────────
+      case 'process.spawn':
+        return _processSpawn(p['cmd']?.toString() ?? '', p['args'], p['cwd']?.toString(), p['env']);
+      case 'process.exec':
+        return _processExec(p['cmd']?.toString() ?? '', p['cwd']?.toString());
+
+      // ── settings ────────────────────────────────────────────────────
+      case 'settings.get':
+        return _settingsGet(p['key']?.toString() ?? '');
+      case 'settings.set':
+        await _settingsSet(p['key']?.toString() ?? '', p['value']);
+        return null;
+      case 'settings.getAll':
+        return _settingsGetAll();
+      case 'settings.onDidChange':
+        return {'dispose': () {}};
 
       default:
         throw Exception('Unknown method: $method');
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // FS helpers
+  // ─────────────────────────────────────────────────────────────────────────
   Future<String?> _fsReadFile(String path) async {
     final f = File(path);
     if (!await f.exists()) return null;
@@ -240,6 +382,12 @@ class PluginSandbox {
     final f = File(path);
     await f.parent.create(recursive: true);
     await f.writeAsString(data);
+  }
+
+  Future<void> _fsAppendFile(String path, String data) async {
+    final f = File(path);
+    await f.parent.create(recursive: true);
+    await f.writeAsString(data, mode: FileMode.append);
   }
 
   Future<bool> _fsDelete(String path) async {
@@ -253,9 +401,26 @@ class PluginSandbox {
     return true;
   }
 
+  Future<bool> _fsDeleteFile(String path) async {
+    final f = File(path);
+    if (!await f.exists()) return false;
+    await f.delete();
+    return true;
+  }
+
+  Future<void> _fsCreateDir(String path) async {
+    await Directory(path).create(recursive: true);
+  }
+
+  Future<bool> _fsDeleteDir(String path) async {
+    final d = Directory(path);
+    if (!await d.exists()) return false;
+    await d.delete(recursive: true);
+    return true;
+  }
+
   Future<bool> _fsExists(String path) async {
-    final type = await FileSystemEntity.type(path);
-    return type != FileSystemEntityType.notFound;
+    return File(path).exists() || Directory(path).exists();
   }
 
   Future<List<Map<String, Object>>> _fsListDir(String path) async {
@@ -272,6 +437,53 @@ class PluginSandbox {
     return out;
   }
 
+  Future<void> _fsCopy(String from, String to) async {
+    final src = File(from);
+    if (await src.exists()) {
+      await Directory(to).parent.create(recursive: true);
+      await src.copy(to);
+    } else {
+      // Copy directory recursively
+      final srcDir = Directory(from);
+      if (!await srcDir.exists()) return;
+      await for (final entity in srcDir.list(recursive: true)) {
+        final rel = entity.path.substring(srcDir.path.length + 1);
+        final dstPath = '$to/$rel';
+        if (entity is Directory) {
+          await Directory(dstPath).create(recursive: true);
+        } else if (entity is File) {
+          await Directory(dstPath).parent.create(recursive: true);
+          await File(entity.path).copy(dstPath);
+        }
+      }
+    }
+  }
+
+  Future<void> _fsMove(String from, String to) async {
+    final type = await FileSystemEntity.type(from);
+    if (type == FileSystemEntityType.file) {
+      await File(from).rename(to);
+    } else if (type == FileSystemEntityType.directory) {
+      await Directory(from).rename(to);
+    }
+  }
+
+  Future<Map<String, Object>?> _fsStat(String path) async {
+    final f = File(path);
+    if (!await f.exists()) return null;
+    final stat = await f.stat();
+    return {
+      'size': stat.size,
+      'modified': stat.modified.toIso8601String(),
+      'created': stat.changed.toIso8601String(),
+      'isFile': stat.type == FileSystemEntityType.file,
+      'isDir': stat.type == FileSystemEntityType.directory,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Workspace helpers
+  // ─────────────────────────────────────────────────────────────────────────
   Future<List<String>> _workspaceFindFiles(String pattern) async {
     await FileService.ensureLayout();
     final root = Directory(FileService.projectsDir);
@@ -313,54 +525,203 @@ class PluginSandbox {
     return RegExp(sb.toString());
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Storage helpers (namespaced)
+  // ─────────────────────────────────────────────────────────────────────────
+  String get _prefix => 'plugin:${plugin.id}:';
+
   Future<String?> _storageGet(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('plugin:${plugin.id}:$key');
+    return prefs.getString('$_prefix$key');
   }
 
   Future<void> _storageSet(String key, String value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('plugin:${plugin.id}:$key', value);
+    await prefs.setString('$_prefix$key', value);
   }
 
   Future<void> _storageDelete(String key) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('plugin:${plugin.id}:$key');
+    await prefs.remove('$_prefix$key');
   }
 
   Future<void> _storageClear() async {
     final prefs = await SharedPreferences.getInstance();
-    final prefix = 'plugin:${plugin.id}:';
-    for (final k in prefs.getKeys().where((k) => k.startsWith(prefix))) {
+    for (final k in prefs.getKeys().where((k) => k.startsWith(_prefix))) {
       await prefs.remove(k);
     }
   }
 
+  Future<Uint8List?> _storageGetBinary(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final b64 = prefs.getString('$_prefix$key');
+    if (b64 == null) return null;
+    return base64Decode(b64);
+  }
+
+  Future<void> _storageSetBinary(String key, List<int> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_prefix$key', base64Encode(data));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HTTP helpers
+  // ─────────────────────────────────────────────────────────────────────────
+  Map<String, String> _parseHeaders(dynamic headers) {
+    if (headers is! Map) return <String, String>{};
+    return headers.map((k, v) => MapEntry(k.toString(), v.toString()));
+  }
+
   Future<Map<String, dynamic>> _httpGet(Map<String, dynamic> p) async {
     final url = p['url']?.toString() ?? '';
-    final headers = (p['headers'] is Map)
-        ? Map<String, String>.from((p['headers'] as Map).map(
-            (k, v) => MapEntry(k.toString(), v.toString())))
-        : <String, String>{};
-    final res = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 30));
-    return {'status': res.statusCode, 'body': res.body};
+    final res = await http.get(Uri.parse(url), headers: _parseHeaders(p['headers']))
+        .timeout(Duration(seconds: (p['timeout'] as num?)?.toInt() ?? 30));
+    return {'status': res.statusCode, 'body': res.body, 'headers': res.headers};
   }
 
   Future<Map<String, dynamic>> _httpPost(Map<String, dynamic> p) async {
     final url = p['url']?.toString() ?? '';
-    final headers = (p['headers'] is Map)
-        ? Map<String, String>.from((p['headers'] as Map).map(
-            (k, v) => MapEntry(k.toString(), v.toString())))
-        : <String, String>{};
     final body = p['body'];
     final encoded = body is String ? body : jsonEncode(body);
-    headers.putIfAbsent('content-type', () => 'application/json');
-    final res = await http
-        .post(Uri.parse(url), headers: headers, body: encoded)
-        .timeout(const Duration(seconds: 30));
-    return {'status': res.statusCode, 'body': res.body};
+    final res = await http.post(Uri.parse(url), headers: _parseHeaders(p['headers']), body: encoded)
+        .timeout(Duration(seconds: (p['timeout'] as num?)?.toInt() ?? 30));
+    return {'status': res.statusCode, 'body': res.body, 'headers': res.headers};
   }
 
+  Future<Map<String, dynamic>> _httpPut(Map<String, dynamic> p) async {
+    final url = p['url']?.toString() ?? '';
+    final body = p['body'];
+    final encoded = body is String ? body : jsonEncode(body);
+    final res = await http.put(Uri.parse(url), headers: _parseHeaders(p['headers']), body: encoded)
+        .timeout(Duration(seconds: (p['timeout'] as num?)?.toInt() ?? 30));
+    return {'status': res.statusCode, 'body': res.body, 'headers': res.headers};
+  }
+
+  Future<Map<String, dynamic>> _httpPatch(Map<String, dynamic> p) async {
+    final url = p['url']?.toString() ?? '';
+    final body = p['body'];
+    final encoded = body is String ? body : jsonEncode(body);
+    final res = await http.patch(Uri.parse(url), headers: _parseHeaders(p['headers']), body: encoded)
+        .timeout(Duration(seconds: (p['timeout'] as num?)?.toInt() ?? 30));
+    return {'status': res.statusCode, 'body': res.body, 'headers': res.headers};
+  }
+
+  Future<Map<String, dynamic>> _httpDelete(Map<String, dynamic> p) async {
+    final url = p['url']?.toString() ?? '';
+    final res = await http.delete(Uri.parse(url), headers: _parseHeaders(p['headers']))
+        .timeout(Duration(seconds: (p['timeout'] as num?)?.toInt() ?? 30));
+    return {'status': res.statusCode, 'body': res.body, 'headers': res.headers};
+  }
+
+  Future<Map<String, dynamic>> _httpStream(Map<String, dynamic> p) async {
+    final url = p['url']?.toString() ?? '';
+    final headers = _parseHeaders(p['headers']);
+    final req = http.Request('GET', Uri.parse(url));
+    req.headers.addAll(headers);
+    final streamed = await http.Client().send(req).timeout(
+      Duration(seconds: (p['timeout'] as num?)?.toInt() ?? 60),
+    );
+    final chunks = <int>[];
+    await for (final chunk in streamed.stream) {
+      chunks.addAll(chunk);
+      // onChunk callback could be invoked here if we had a mechanism
+    }
+    final body = utf8.decode(chunks);
+    return {'status': streamed.statusCode, 'body': body};
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Terminal / Process helpers
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> _terminalRun(String cmd, String? cwd) async {
+    try {
+      final result = await Process.run(
+        'sh',
+        ['-c', cmd],
+        workingDirectory: cwd,
+        runInShell: false,
+      ).timeout(const Duration(minutes: 5));
+      return {
+        'stdout': result.stdout.toString(),
+        'stderr': result.stderr.toString(),
+        'exitCode': result.exitCode,
+      };
+    } catch (e) {
+      return {'stdout': '', 'stderr': e.toString(), 'exitCode': -1};
+    }
+  }
+
+  Future<Map<String, dynamic>> _processSpawn(String cmd, dynamic args, String? cwd, dynamic env) async {
+    final argList = (args is List) ? args.map((e) => e.toString()).toList() : <String>[];
+    try {
+      final result = await Process.run(
+        cmd,
+        argList,
+        workingDirectory: cwd,
+        environment: env is Map ? env.map((k, v) => MapEntry(k.toString(), v.toString())) : null,
+        runInShell: true,
+      ).timeout(const Duration(minutes: 10));
+      return {
+        'stdout': result.stdout.toString(),
+        'stderr': result.stderr.toString(),
+        'exitCode': result.exitCode,
+      };
+    } catch (e) {
+      return {'stdout': '', 'stderr': e.toString(), 'exitCode': -1};
+    }
+  }
+
+  Future<Map<String, dynamic>> _processExec(String cmd, String? cwd) async {
+    return _terminalRun(cmd, cwd);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Settings helpers
+  // ─────────────────────────────────────────────────────────────────────────
+  dynamic _settingsGet(String key) {
+    final s = SettingsService.instance;
+    switch (key) {
+      case 'theme': return s.themeMode == ThemeMode.light ? 'light' : 'dark';
+      case 'fontSize': return s.fontSize;
+      case 'fontFamily': return s.fontFamily;
+      case 'tabSize': return s.tabSize;
+      case 'wordWrap': return s.wordWrap;
+      case 'autoSave': return s.autoSave;
+      case 'torEnabled': return s.torEnabled;
+      case 'developerMode': return s.developerMode;
+      case 'language': return s.language;
+      case 'completionEnabled': return s.completionEnabled;
+      case 'completionDelayMs': return s.completionDelayMs;
+      case 'completionMaxItems': return s.completionMaxItems;
+      default: return null;
+    }
+  }
+
+  Future<void> _settingsSet(String key, dynamic value) async {
+    // Currently settings changes are best-effort; full persistence requires
+    // wiring each key to SharedPreferences. For now we silently accept.
+  }
+
+  Map<String, dynamic> _settingsGetAll() {
+    return {
+      'theme': SettingsService.instance.themeMode == ThemeMode.light ? 'light' : 'dark',
+      'fontSize': SettingsService.instance.fontSize,
+      'fontFamily': SettingsService.instance.fontFamily,
+      'tabSize': SettingsService.instance.tabSize,
+      'wordWrap': SettingsService.instance.wordWrap,
+      'autoSave': SettingsService.instance.autoSave,
+      'torEnabled': SettingsService.instance.torEnabled,
+      'developerMode': SettingsService.instance.developerMode,
+      'language': SettingsService.instance.language,
+      'completionEnabled': SettingsService.instance.completionEnabled,
+      'completionDelayMs': SettingsService.instance.completionDelayMs,
+      'completionMaxItems': SettingsService.instance.completionMaxItems,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // JS bootstrap, hook firing, public helpers
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> fireHook(String name, [Object? data]) async {
     await _ctrl?.evaluateJavascript(
       source:
@@ -399,6 +760,7 @@ class PluginSandbox {
           if (cb) { try { cb(); } catch (e) { console.error(e); } }
         };
 
+        // ── editor ──────────────────────────────────────────────────────
         const editor = {
           getText: () => invoke('editor.getText'),
           setText: (t) => invoke('editor.setText', { text: String(t) }),
@@ -416,11 +778,20 @@ class PluginSandbox {
           getCursorPosition: () => invoke('editor.getCursorPosition'),
           setCursorPosition: (l, c) => invoke('editor.setCursorPosition', { line: l, column: c }),
           executeCommand: (cmd) => invoke('editor.executeCommand', { command: String(cmd) }),
+          openFile: (path) => invoke('editor.openFile', { path: String(path) }),
+          getOpenFiles: () => invoke('editor.getOpenFiles'),
+          closeFile: (path) => invoke('editor.closeFile', { path: String(path) }),
+          getValue: () => invoke('editor.getText'),
+          setValue: (v) => invoke('editor.setText', { text: String(v) }),
+          getCursor: () => invoke('editor.getCursorPosition'),
+          setCursor: (line, col) => invoke('editor.setCursorPosition', { line: line, column: col }),
         };
 
+        // ── ui ──────────────────────────────────────────────────────────
         const ui = {
           showMessage: (text) => invoke('ui.showMessage', { text: String(text) }),
           showError: (text) => invoke('ui.showError', { text: String(text) }),
+          showWarning: (text) => invoke('ui.showWarning', { text: String(text) }),
           showInputBox: (opts) => invoke('ui.showInputBox', {
             title: opts && opts.title ? String(opts.title) : null,
             placeholder: opts && opts.placeholder ? String(opts.placeholder) : null,
@@ -430,24 +801,130 @@ class PluginSandbox {
             items: Array.isArray(items) ? items.map(String) : [],
             title: opts && opts.title ? String(opts.title) : null,
           }),
-          showProgress: (title) => Promise.resolve(),
+          showProgress: (title) => invoke('ui.showProgress', { title: String(title) }),
+          showDiff: (opts) => invoke('ui.showDiff', {
+            original: opts && opts.original ? String(opts.original) : '',
+            modified: opts && opts.modified ? String(opts.modified) : '',
+          }),
+          withProgress: (opts, task) => invoke('ui.withProgress', {
+            title: opts && opts.title ? String(opts.title) : '',
+          }),
           createStatusBarItem: () => ({ setText: () => {}, dispose: () => {} }),
-          createWebViewPanel: () => ({ dispose: () => {} }),
+          createWebViewPanel: (opts) => ({
+            html: opts && opts.html ? String(opts.html) : '',
+            setTitle: () => {},
+            postMessage: () => {},
+            onMessage: (cb) => ({ dispose: () => {} }),
+            update: (h) => {},
+            close: () => {},
+            dispose: () => {},
+          }),
+          createPanel: (opts) => ({
+            html: opts && opts.html ? String(opts.html) : '',
+            setTitle: (t) => {},
+            postMessage: (m) => {},
+            onMessage: (cb) => ({ dispose: () => {} }),
+            update: (h) => {},
+            close: () => {},
+            dispose: () => {},
+          }),
         };
 
+        // ── storage ─────────────────────────────────────────────────────
         const storage = {
           get: (k) => invoke('storage.get', { key: String(k) }),
           set: (k, v) => invoke('storage.set', { key: String(k), value: String(v) }),
           delete: (k) => invoke('storage.delete', { key: String(k) }),
           clear: () => invoke('storage.clear'),
+          getBinary: (k) => invoke('storage.getBinary', { key: String(k) }),
+          setBinary: (k, data) => invoke('storage.setBinary', { key: String(k), data: data || [] }),
         };
 
+        // ── http ────────────────────────────────────────────────────────
         const http = {
           get: (url, headers) => invoke('http.get', { url: String(url), headers: headers || {} }),
           post: (url, body, headers) => invoke('http.post',
             { url: String(url), body: body, headers: headers || {} }),
+          put: (url, body, headers) => invoke('http.put',
+            { url: String(url), body: body, headers: headers || {} }),
+          patch: (url, body, headers) => invoke('http.patch',
+            { url: String(url), body: body, headers: headers || {} }),
+          delete: (url, headers) => invoke('http.delete',
+            { url: String(url), headers: headers || {} }),
+          stream: (url, opts) => invoke('http.stream',
+            { url: String(url), headers: (opts && opts.headers) || {}, timeout: opts && opts.timeout || 60 }),
+          webSocket: (url) => ({
+            send: () => {},
+            onMessage: (cb) => ({ dispose: () => {} }),
+            onError: (cb) => ({ dispose: () => {} }),
+            close: () => {},
+          }),
         };
 
+        // ── fs ──────────────────────────────────────────────────────────
+        const fs = {
+          readFile: (path) => invoke('fs.readFile', { path: String(path) }),
+          writeFile: (path, data) => invoke('fs.writeFile', { path: String(path), data: String(data) }),
+          appendFile: (path, data) => invoke('fs.appendFile', { path: String(path), data: String(data) }),
+          deleteFile: (path) => invoke('fs.deleteFile', { path: String(path) }),
+          deleteDir: (path) => invoke('fs.deleteDir', { path: String(path) }),
+          delete: (path) => invoke('fs.delete', { path: String(path) }),
+          createDir: (path) => invoke('fs.createDir', { path: String(path) }),
+          exists: (path) => invoke('fs.exists', { path: String(path) }),
+          listDir: (path) => invoke('fs.listDir', { path: String(path) }),
+          readDir: (path) => invoke('fs.readDir', { path: String(path) }),
+          copy: (from, to) => invoke('fs.copy', { from: String(from), to: String(to) }),
+          move: (from, to) => invoke('fs.move', { from: String(from), to: String(to) }),
+          stat: (path) => invoke('fs.stat', { path: String(path) }),
+          watch: (path, cb) => ({ dispose: () => {} }),
+          getRoot: () => invoke('fs.getRoot'),
+          getCurrent: () => invoke('fs.getCurrent'),
+        };
+
+        // ── workspace ───────────────────────────────────────────────────
+        const workspace = {
+          getRoot: () => invoke('workspace.getRoot'),
+          openFile: (path) => invoke('workspace.openFile', { path: String(path) }),
+          findFiles: (pattern) => invoke('workspace.findFiles', { pattern: String(pattern || '**/*') }),
+          onDidSaveFile: (cb) => on('onSave', cb),
+          onDidOpenFile: (cb) => on('onFileOpen', cb),
+        };
+
+        // ── terminal ────────────────────────────────────────────────────
+        const terminal = {
+          run: (cmd, cwd) => invoke('terminal.run', { cmd: String(cmd), cwd: cwd || null }),
+          create: (name) => invoke('terminal.create', { name: String(name) }),
+          send: (input) => invoke('terminal.send', { input: String(input) }),
+          kill: () => invoke('terminal.kill'),
+          onOutput: (name, cb) => on('terminal.' + name, cb),
+        };
+
+        // ── process ─────────────────────────────────────────────────────
+        const process = {
+          spawn: (cmd, args, opts) => invoke('process.spawn', {
+            cmd: String(cmd),
+            args: Array.isArray(args) ? args : [],
+            cwd: opts && opts.cwd ? String(opts.cwd) : null,
+            env: opts && opts.env ? opts.env : null,
+          }),
+          exec: (cmd, opts) => invoke('process.exec', {
+            cmd: String(cmd),
+            cwd: opts && opts.cwd ? String(opts.cwd) : null,
+          }),
+        };
+
+        // ── settings ────────────────────────────────────────────────────
+        const settings = {
+          get: (key) => invoke('settings.get', { key: String(key) }),
+          set: (key, value) => invoke('settings.set', { key: String(key), value: value }),
+          getAll: () => invoke('settings.getAll'),
+          onDidChange: (cb) => {
+            on('onSettingsChange', cb);
+            return { dispose: () => {} };
+          },
+        };
+
+        // ── commands & hooks ────────────────────────────────────────────
         const commandsApi = {
           registerCommand: (id, cb) => {
             commands.set(id, cb);
@@ -459,30 +936,9 @@ class PluginSandbox {
           },
         };
 
-        const fs = {
-          readFile: (path) => invoke('fs.readFile', { path: String(path) }),
-          writeFile: (path, data) => invoke('fs.writeFile', { path: String(path), data: String(data) }),
-          delete: (path) => invoke('fs.delete', { path: String(path) }),
-          exists: (path) => invoke('fs.exists', { path: String(path) }),
-          listDir: (path) => invoke('fs.listDir', { path: String(path) }),
-          watch: (path, cb) => ({ dispose: () => {} }),
-        };
-
-        const workspace = {
-          getRoot: () => invoke('workspace.getRoot'),
-          openFile: (path) => invoke('workspace.openFile', { path: String(path) }),
-          findFiles: (pattern) => invoke('workspace.findFiles', { pattern: String(pattern || '**/*') }),
-          onDidSaveFile: (cb) => on('onSave', cb),
-          onDidOpenFile: (cb) => on('onFileOpen', cb),
-        };
-
-        const terminal = {
-          create: () => Promise.resolve({ id: '' }),
-          runCommand: (cmd) => Promise.resolve({ status: 0, output: '' }),
-        };
-
+        // ── assemble ────────────────────────────────────────────────────
         window.vscode = {
-          editor, ui, storage, http, fs, workspace, terminal,
+          editor, ui, storage, http, fs, workspace, terminal, process, settings,
           commands: commandsApi,
           hooks: {
             onSave: (cb) => on('onSave', cb),
@@ -492,8 +948,6 @@ class PluginSandbox {
             onSettingsChange: (cb) => on('onSettingsChange', cb),
           },
         };
-        // XunCode rebrand: same API surface, exposed under the new namespace.
-        // Old plugins keep working through window.vscode.
         window.xuncode = window.vscode;
 
         const moduleObj = { exports: {} };
@@ -506,9 +960,7 @@ class PluginSandbox {
             if (typeof ex.activate === 'function') {
               ex.activate(window.vscode);
             }
-          } catch (e) {
-            console.error('plugin activate failed', e);
-          }
+          } catch (e) { console.error('plugin activate failed', e); }
         };
       })();
     ''';

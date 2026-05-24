@@ -17,7 +17,7 @@ module.exports = async (req, res) => {
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch (_) { body = {}; }
   }
-  const { githubUrl, name, description, author, pluginId } = body || {};
+  const { githubUrl, name, description, author, pluginId, version, tags, permissions } = body || {};
 
   if (!githubUrl || typeof githubUrl !== 'string') {
     return res.status(400).json({ error: 'githubUrl required' });
@@ -63,9 +63,12 @@ module.exports = async (req, res) => {
   list.push({
     id: pluginId,
     name: name || pluginId,
+    version: version || '1.0.0',
     description: description || '',
     author: author || owner,
     githubUrl: cleaned,
+    tags: Array.isArray(tags) ? tags : [],
+    permissions: Array.isArray(permissions) ? permissions : [],
     submittedAt: new Date().toISOString(),
   });
 

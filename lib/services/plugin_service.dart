@@ -14,6 +14,47 @@ import 'review_service.dart';
 class PluginService {
   static const _apiBase = 'https://vscodemobile-market.vercel.app';
   static const _installedKey = 'installed_plugins_v2';
+  static const _permsKey = 'plugin_permissions';
+
+  /// Returns the set of permissions the user has granted for a plugin.
+  static Future<Set<String>> getGrantedPermissions(String pluginId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('$_permsKey:$pluginId');
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final list = jsonDecode(raw);
+      if (list is List) return list.map((e) => e.toString()).toSet();
+    } catch (_) {}
+    return {};
+  }
+
+  /// Grant a permission to a plugin (user-approved).
+  static Future<void> grantPermission(String pluginId, String permission) async {
+    final granted = await getGrantedPermissions(pluginId);
+    granted.add(permission);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_permsKey:$pluginId', jsonEncode(granted.toList()));
+  }
+
+  /// Revoke a permission.
+  static Future<void> revokePermission(String pluginId, String permission) async {
+    final granted = await getGrantedPermissions(pluginId);
+    granted.remove(permission);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_permsKey:$pluginId', jsonEncode(granted.toList()));
+  }
+
+  /// Check if a plugin has a specific permission granted.
+  static Future<bool> hasPermission(String pluginId, String permission) async {
+    final granted = await getGrantedPermissions(pluginId);
+    return granted.contains(permission);
+  }
+
+  /// Returns permissions declared in plugin.json that haven't been granted yet.
+  static Future<List<String>> getPendingPermissions(InstalledPlugin plugin) async {
+    final granted = await getGrantedPermissions(plugin.id);
+    return plugin.permissions.where((p) => !granted.contains(p)).toList();
+  }
 
   // In-memory marketplace cache. The list endpoint is small and rarely changes,
   // so we hold the result for a short window so navigating in/out of the

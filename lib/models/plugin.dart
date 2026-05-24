@@ -75,6 +75,10 @@ class InstalledPlugin {
   String get author => (manifest['author'] ?? '').toString();
   String get description => (manifest['description'] ?? '').toString();
   String get mainFile => (manifest['main'] ?? 'main.js').toString();
+  List<String> get permissions =>
+      (manifest['permissions'] is List)
+          ? (manifest['permissions'] as List).map((e) => e.toString()).toList()
+          : const [];
 
   Map<String, dynamic> toJson() => {
         'id': id,
