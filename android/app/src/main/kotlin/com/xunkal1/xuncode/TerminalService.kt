@@ -62,6 +62,13 @@ class TerminalService(private val appContext: Context) {
     fun prootBinary(): File =
         File(appDataDir(), "proot/proot")
 
+    /** Делает proot-бинарник исполняемым через Java File API. */
+    fun chmodProot(): Boolean {
+        val f = prootBinary()
+        if (!f.exists()) return false
+        return f.setExecutable(true, false)
+    }
+
     fun create(id: String, cols: Int, rows: Int, sink: EventChannel.EventSink): String {
         kill(id)
         val session = TerminalSession(this, id, cols, rows, sink)
@@ -143,13 +150,19 @@ class TerminalSession(
         if (!proot.exists() || proot.length() == 0L) {
             return emit("[terminal] proot binary missing")
         }
+        if (!proot.canExecute()) {
+            // Попытка сделать исполняемым на случай, если chmod не сработал ранее
+            runCatching { proot.setExecutable(true, false) }
+        }
+        if (!proot.canExecute()) {
+            return emit("[terminal] proot binary is not executable and chmod failed. " +
+                "Try: Settings → Terminal → Clear terminal cache, then restart terminal.")
+        }
         if (!service.isInstalled()) {
             return emit("[terminal] Alpine rootfs not installed yet — run installAlpine first")
         }
 
         return try {
-            runCatching { proot.setExecutable(true, false) }
-
             val shared = service.sharedDir().absolutePath
             val pb = ProcessBuilder(
                 proot.absolutePath,

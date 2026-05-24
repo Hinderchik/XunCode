@@ -104,8 +104,9 @@ class TerminalBridge {
       await prootFile.delete();
       throw Exception('proot download failed: file too small');
     }
-    // chmod 755 — через Process.run (Dart File API не поддерживает chmod на Android)
-    await Process.run('chmod', ['755', prootFile.path]);
+    // Нативный chmod через MethodChannel — Process.run('chmod') не работает
+    // на Android 13+ для /storage/emulated/0/Android/data/ (scoped storage + SELinux)
+    await _method.invokeMethod<void>('chmodProot');
   }
 
   /// Скачивает proot-бинарник с GitHub (публичный метод для UI).
