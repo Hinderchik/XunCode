@@ -9,17 +9,6 @@ import java.io.InputStreamReader
 import java.io.OutputStream
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Manages multiple proot+Alpine shell sessions. Each session is backed by a
- * native proot process whose stdin/stdout is bridged to Dart via
- * MethodChannel (write/resize/kill) and EventChannel (output stream).
- *
- * Storage layout:
- *  - Private:  context.getExternalFilesDir(null)
- *      = /storage/emulated/0/Android/data/<pkg>/files/
- *  - Shared:   <external>/Shared/XunCode/
- *      = /storage/emulated/0/Shared/XunCode/   (created via Environment)
- */
 class TerminalService(private val appContext: Context) {
 
     private val sessions = ConcurrentHashMap<String, TerminalSession>()
@@ -60,9 +49,8 @@ class TerminalService(private val appContext: Context) {
     }
 
     fun prootBinary(): File =
-        File(appDataDir(), "proot/proot")
+        File(appContext.filesDir, "proot/proot")
 
-    /** Делает proot-бинарник исполняемым через Java File API. */
     fun chmodProot(): Boolean {
         val f = prootBinary()
         if (!f.exists()) return false
@@ -105,7 +93,6 @@ class TerminalService(private val appContext: Context) {
         File(rootfsDir(), ".installed").writeText("ok")
     }
 
-    /** Полный сброс распакованного Alpine rootfs. */
     fun clearRootfs() {
         killAll()
         val d = rootfsDir()
@@ -148,35 +135,31 @@ class TerminalSession(
         val rootfs = service.rootfsDir()
 
         if (!proot.exists() || proot.length() == 0L) {
-            return emit("[terminal] proot binary missing")
-        }
-        if (!proot.canExecute()) {
-            // Попытка сделать исполняемым на случай, если chmod не сработал ранее
-            runCatching { proot.setExecutable(true, false) }
-        }
-        if (!proot.canExecute()) {
-            return emit("[terminal] proot binary is not executable and chmod failed. " +
-                "Try: Settings → Terminal → Clear terminal cache, then restart terminal.")
+            return emit("[terminal] proot binary missing — download first")
         }
         if (!service.isInstalled()) {
-            return emit("[terminal] Alpine rootfs not installed yet — run installAlpine first")
+            return emit("[terminal] Alpine rootfs not installed yet — install first")
         }
 
+        // Запускаем через /system/bin/sh -c с chmod внутри — обходит noexec
+        // на /data/data/<pkg>/files/. sh выполняет chmod 755 и exec proot.
         return try {
             val shared = service.sharedDir().absolutePath
+            val prootPath = proot.absolutePath
+            val rootfsPath = rootfs.absolutePath
+
             val pb = ProcessBuilder(
-                proot.absolutePath,
-                "-r", rootfs.absolutePath,
-                "-w", "/root",
-                "-b", "/dev",
-                "-b", "/proc",
-                "-b", "/sys",
-                "-b", "/dev/urandom:/dev/random",
-                "-b", "/proc/self/fd:/dev/fd",
-                "-b", "$shared:/sdcard/XunCode",
-                "-b", "$shared:/home/user",
-                "-0",
-                "/bin/sh", "-l",
+                "/system/bin/sh", "-c",
+                "chmod 755 \"$prootPath\" && " +
+                "exec \"$prootPath\" " +
+                "-r \"$rootfsPath\" " +
+                "-w /root " +
+                "-b /dev -b /proc -b /sys " +
+                "-b /dev/urandom:/dev/random " +
+                "-b /proc/self/fd:/dev/fd " +
+                "-b \"$shared:/sdcard/XunCode\" " +
+                "-b \"$shared:/home/user\" " +
+                "-0 /bin/sh -l",
             )
             pb.environment().apply {
                 put("HOME", "/root")
@@ -186,8 +169,6 @@ class TerminalSession(
                 put("LANG", "C.UTF-8")
                 put("PROOT_TMP_DIR", File(service.appDataDir(), "tmp").absolutePath)
                 put("XUNCODE_HOME", "/sdcard/XunCode")
-                put("COLUMNS", cols.toString())
-                put("LINES", rows.toString())
             }
             pb.redirectErrorStream(true)
 

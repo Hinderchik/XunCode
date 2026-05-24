@@ -56,6 +56,9 @@ class MainActivity : FlutterActivity() {
                 "chmodProot" -> {
                     result.success(terminalService.chmodProot())
                 }
+                "filesDir" -> {
+                    result.success(applicationContext.filesDir.absolutePath)
+                }
                 "createUnsandboxed" -> {
                     val id = call.argument<String>("id") ?: return@setMethodCallHandler result.error("ARG", "missing id", null)
                     val sink = sinks[id]

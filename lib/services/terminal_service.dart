@@ -4,14 +4,10 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'file_service.dart';
 
-/// Bridge to the native [TerminalService.kt]. Each [TerminalSession] owns one
-/// proot+Alpine shell process; output is pushed via an EventChannel and writes
-/// go through a MethodChannel.
 class TerminalBridge {
   static const _method = MethodChannel('com.xunkal1.xuncode/terminal');
   static const _events = EventChannel('com.xunkal1.xuncode/terminal/events');
@@ -19,8 +15,6 @@ class TerminalBridge {
   static Future<bool> isAlpineInstalled() async {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('alpine.installed') == true) {
-      // Доверяем флагу только если rootfs физически на месте: пользователь
-      // мог удалить /Android/data/.../rootfs вручную, и тогда proot упадёт.
       try {
         final root = await rootfsPath();
         if (root.isNotEmpty) {
@@ -28,13 +22,11 @@ class TerminalBridge {
           if (await marker.exists()) return true;
           final dir = Directory(root);
           if (await dir.exists() && await _hasContent(dir)) {
-            // rootfs распакован, а маркер потерялся — починим и подтвердим.
             await marker.writeAsString('ok');
             return true;
           }
         }
       } catch (_) {}
-      // Файлы пропали — сбрасываем флаг, чтобы предложить переустановку.
       await prefs.setBool('alpine.installed', false);
     }
     final v = await _method.invokeMethod<bool>('isAlpineInstalled');
@@ -52,9 +44,6 @@ class TerminalBridge {
     return false;
   }
 
-  /// Полный сброс кэша терминала — удаляет распакованный Alpine rootfs и
-  /// SharedPreferences-маркер. После этого следующий запуск терминала
-  /// пройдёт через installAlpine заново.
   static Future<void> clearAlpineCache() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('alpine.installed', false);
@@ -79,44 +68,34 @@ class TerminalBridge {
     return v ?? false;
   }
 
-  /// Путь к proot-бинарнику во внешнем filesDir.
-  static Future<String> _prootFilePath() async {
-    final dir = await getExternalStorageDirectory();
-    return '${dir!.path}/proot/proot';
-  }
-
-  /// Убеждаемся, что proot-бинарник скачан и исполняемый.
-  /// Если файл уже существует — скачивание пропускается.
-  /// Качает с GitHub (raw), сохраняет и ставит chmod 755.
+  /// Скачивает proot с GitHub в filesDir/proot/proot (один раз).
+  /// Запуск через /system/bin/sh -c с chmod внутри — обходит noexec.
   static Future<void> ensureProot() async {
-    final prootFile = File(await _prootFilePath());
-    if (await prootFile.exists()) return;
+    final dir = await _method.invokeMethod<String>('filesDir');
+    if (dir == null || dir.isEmpty) throw Exception('filesDir not available');
+    final prootFile = File('$dir/proot/proot');
+    if (await prootFile.exists() && await prootFile.length() > 1024) return;
     await prootFile.parent.create(recursive: true);
 
     const url =
         'https://raw.githubusercontent.com/Hinderchik/XunCode/main/proot';
     final dio = Dio();
-    final response = await dio.download(url, prootFile.path);
-    if (response.statusCode != 200) {
-      throw Exception('proot download failed: HTTP ${response.statusCode}');
+    await dio.download(url, prootFile.path);
+
+    if (!await prootFile.exists() || await prootFile.length() < 1024) {
+      await _silent(() => prootFile.delete());
+      throw Exception('proot download failed: file missing or too small');
     }
-    if (prootFile.lengthSync() < 1024) {
-      await prootFile.delete();
-      throw Exception('proot download failed: file too small');
-    }
-    // Нативный chmod через MethodChannel — Process.run('chmod') не работает
-    // на Android 13+ для /storage/emulated/0/Android/data/ (scoped storage + SELinux)
+    // Делаем исполняемым через Java File API
     await _method.invokeMethod<void>('chmodProot');
   }
 
-  /// Скачивает proot-бинарник с GitHub (публичный метод для UI).
-  /// Возвращает true при успехе.
+  /// Скачивает proot (публичный метод для UI). Возвращает true при успехе.
   static Future<bool> downloadProot() async {
     await ensureProot();
     return true;
   }
 
-  /// Boots a /system/bin/sh session — used when proot can't be obtained.
   static Future<TerminalSession> createUnsandboxed({required String id}) async {
     final session = TerminalSession._(id, 80, 24);
     await session._openUnsandboxed();
@@ -129,12 +108,6 @@ class TerminalBridge {
     await prefs.setBool('alpine.installed', true);
   }
 
-  /// Downloads the Alpine minirootfs and extracts it into the app's filesDir.
-  /// Calls [onProgress] with bytes-received for download phase, then again
-  /// during extraction. Idempotent: short-circuits if already installed.
-  ///
-  /// Streaming: gunzips into a temp .tar file, then walks tar entries one at
-  /// a time via TarDecoder so the whole archive never sits in memory at once.
   static Future<void> installAlpine({
     void Function(double progress, String stage)? onProgress,
     CancelToken? cancelToken,
@@ -145,10 +118,6 @@ class TerminalBridge {
     final rootDir = Directory(root);
     if (!await rootDir.exists()) await rootDir.create(recursive: true);
 
-    // Дополнительная страховка: если папка непуста и в ней есть базовая
-    // структура (`bin/` или `etc/`), считаем установку завершённой и просто
-    // проставляем маркер — пользователь мог удалить только `.installed`,
-    // а 60+ MB unpacked rootfs трогать смысла нет.
     final hasBin = await Directory('$root/bin').exists();
     final hasEtc = await Directory('$root/etc').exists();
     if (hasBin || hasEtc) {
@@ -258,7 +227,6 @@ class TerminalBridge {
   }
 
   static String _alpineArch() {
-    // Android arch -> Alpine arch
     final abi = _abi();
     switch (abi) {
       case 'arm64-v8a':
@@ -275,8 +243,6 @@ class TerminalBridge {
   }
 
   static String _abi() {
-    // Best-effort; Flutter doesn't expose the running ABI directly. We rely
-    // on Platform.version / Platform.operatingSystemVersion fallback to 64-bit.
     final v = Platform.operatingSystemVersion.toLowerCase();
     if (v.contains('aarch64') || v.contains('arm64')) return 'arm64-v8a';
     if (v.contains('armv7') || v.contains('armeabi')) return 'armeabi-v7a';
@@ -374,8 +340,6 @@ class TerminalSession {
   }
 }
 
-/// Helper that swallows synchronous exceptions — used for best-effort cleanup
-/// where we genuinely don't care about failures.
 T? runCatching<T>(T Function() block) {
   try {
     return block();
